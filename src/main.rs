@@ -22,15 +22,23 @@
  SOFTWARE.
 */
 
-use std::fs::OpenOptions;
-
-use clap::{Arg, App, SubCommand, AppSettings};
-use clap::crate_version;
-
 mod cmd;
 mod fs;
+mod device;
 
-fn main() {
+use clap::{Arg, App, SubCommand, AppSettings};
+use clap::{crate_version, value_t};
+use failure::{Error, format_err};
+use nix::sys::stat::{stat, SFlag};
+
+use crate::device::FileDevice;
+
+enum DeviceType {
+    File,
+    Block,
+}
+
+fn main() -> Result<(), Error> {
     let app = App::new("learnfs")
         .version(crate_version!())
         .about("LearnFS command line tool")
@@ -44,31 +52,105 @@ fn main() {
                         .index(1)
                         .required(true)
                 )
-        );
+                .arg(
+                    Arg::with_name("capacity")
+                        .help("Explicitly set file capacity in bytes")
+                        .short("c")
+                        .long("capacity")
+                        .takes_value(true)
+                        .default_value("0")
+                )
+        ).subcommand(
+        SubCommand::with_name("info")
+            .about("Show existing filesystem info")
+            .setting(AppSettings::DisableVersion)
+            .arg(
+                Arg::with_name("device")
+                    .help("Block device to use")
+                    .index(1)
+                    .required(true)
+            )
+    );
 
     let help = extract_help(&app);
 
     match app.get_matches().subcommand() {
         ("create", Some(create_match)) => {
-            let device = create_match.value_of("device").unwrap();
+            let path = create_match.value_of("device").unwrap();
 
-            let mut file = OpenOptions::new()
-                .write(true)
-                .truncate(true)
-                .create(true)
-                .open(device).unwrap();
+            match device_type(path) {
+                Ok(DeviceType::File) => {
+                    let capacity = value_t!(create_match,
+                     "capacity", u64).unwrap();
 
-            cmd::create::create_fs(&mut file).unwrap();
+                    if capacity == 0 {
+                        return Err(format_err!(
+                         "please explicitly specify file device capacity"));
+                    }
+
+                    let mut device = FileDevice::new(path, capacity)?;
+                    cmd::create::create_fs(device).unwrap();
+                }
+                Ok(DeviceType::Block) => {
+                    unimplemented!()
+                }
+                Err(e) => {
+                    return Err(e);
+                }
+            }
+        }
+        ("info", Some(m)) => {
+            let path = m.value_of("device").unwrap();
+
+            match device_type(path) {
+                Ok(DeviceType::File) => {
+                    let device = FileDevice::open(path)?;
+                    let info = cmd::info::fs_info(device)?;
+
+                    println!("{:?}", info)
+                }
+                Ok(DeviceType::Block) => {
+                    unimplemented!()
+                }
+                Err(e) => {
+                    return Err(e);
+                }
+            }
         }
         _ => {
             eprintln!("{}", help);
         }
     }
 
-    fn extract_help(app: &App) -> String {
-        let mut vec: Vec<u8> = Vec::new();
-        let _ = app.write_help(&mut vec);
+    Ok(())
+}
 
-        return String::from_utf8(vec).unwrap();
+fn extract_help(app: &App) -> String {
+    let mut vec: Vec<u8> = Vec::new();
+    let _ = app.write_help(&mut vec);
+
+    return String::from_utf8(vec).unwrap();
+}
+
+fn device_type(path: &str) -> Result<DeviceType, Error> {
+    match stat(path) {
+        Ok(st) => {
+            match SFlag::from_bits(st.st_mode & SFlag::S_IFMT.bits()) {
+                // Block device
+                Some(SFlag::S_IFBLK) => {
+                    Ok(DeviceType::Block)
+                }
+                // Regular file
+                Some(SFlag::S_IFREG) => {
+                    Ok(DeviceType::File)
+                }
+                _ => {
+                    Err(format_err!("Only block devices and regular files are currently supported"))
+                }
+            }
+        }
+        Err(e) => {
+            Err(format_err!("Failed to read device stat: {}", e))
+        }
     }
 }

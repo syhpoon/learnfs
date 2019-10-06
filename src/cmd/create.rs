@@ -22,46 +22,46 @@
  SOFTWARE.
 */
 
-use std::io;
-use std::io::{Write, Seek, SeekFrom};
+use std::io::SeekFrom;
 
+use failure::Error;
+
+use crate::device::Device;
 use crate::fs;
 
 /// Create a new filesystem on a given device
-pub fn create_fs<T>(device: &mut T) -> io::Result<()>
-    where T: Write + Seek {
-
+pub fn create_fs(mut device: impl Device) -> Result<(), Error> {
     create_superblock(device)?;
 
     Ok(())
 }
 
-fn create_superblock<T>(device: &mut T) -> io::Result<()>
-    where T: Write + Seek {
+fn create_superblock(mut device: impl Device) -> Result<(), Error> {
+    let sb_params = fs::superblock::Params {
+        disk_size: device.capacity().unwrap(),
+        ..Default::default()
+    };
 
-    let sb_params: fs::superblock::Params = Default::default();
     let sb = fs::Superblock::new(sb_params);
 
     // Skip boot block
-    device.seek(SeekFrom::Start(fs::BOOT_BLOCK_SIZE)).unwrap();
+    device.seek(SeekFrom::Start(fs::BOOT_BLOCK_SIZE))?;
 
-    // Write superblock
-    let bytes: Vec<u8> = bincode::serialize(&sb).unwrap();
-    device.write(bytes.as_slice()).unwrap();
+    // 1. Write superblock
+    let bytes: Vec<u8> = bincode::serialize(&sb)?;
+    device.write(bytes.as_slice())?;
 
-    // Zero inode and data bitmaps
-    let bitmap_size = sb.num_inode_bitmap_blocks * sb.block_size;
+    // 2. Zero inode bitmap
+    let inode_bitmap_size = sb.num_inode_bitmap_blocks * sb.block_size;
+    let mut inode_bitmap: Vec<u8> = vec![0; inode_bitmap_size as usize];
 
-    // Allocate memory for inode bitmap blocks
-    let mut inode_bitmap: Vec<u8> = vec![0; bitmap_size as usize];
+    device.write_all(inode_bitmap.as_slice())?;
 
-    // Mark zeroth inode block as used because block numbering stars with 1
-    inode_bitmap[0] = 1;
+    // 3. Write data bitmap
+    let data_bitmap_size = sb.num_data_bitmap_blocks * sb.block_size;
+    let mut data_bitmap: Vec<u8> = vec![0; data_bitmap_size as usize];
 
-    // The first inode is used for the root dir
-    inode_bitmap[1] = 1;
-
-    device.write_all(inode_bitmap.as_slice()).unwrap();
+    device.write_all(data_bitmap.as_slice())?;
 
     Ok(())
 }

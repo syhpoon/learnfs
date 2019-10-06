@@ -22,5 +22,18 @@
  SOFTWARE.
 */
 
-pub mod create;
-pub mod info;
+mod file;
+
+use std::io;
+
+use failure::Error;
+
+pub use file::FileDevice;
+
+/// Defines a device abstraction.
+/// All the rest of the code works with this interface.
+pub trait Device: io::Write + io::Read + io::Seek {
+    /// Return device capacity in bytes
+    fn capacity(&mut self) -> Result<u64, Error>;
+}
+

@@ -1,4 +1,6 @@
 pub struct Inode {
+    // File type
+    ftype: u16,
     // File mode
     mode: u16,
     // Number of directories containing this inode
