@@ -23,7 +23,10 @@
 */
 
 use serde::{Serialize, Deserialize};
+use failure::{Error, format_err};
+
 use crate::fs::{BOOT_BLOCK_SIZE, SUPERBLOCK_SIZE};
+use crate::fs::bitmap::Bitmap;
 
 pub struct Params {
     // Disk size in bytes
@@ -69,18 +72,13 @@ pub struct Superblock {
     pub num_inode_blocks: u32,
     // The offset of the first block containing data in bytes
     pub first_data_block_offset: u64,
-
-    // Following fields are only present when superblock is loaded
-    // into memory
-    //TODO
-    //pub next_free_inode: u64,
-    //pub next_free_data: u64,
 }
 
 impl Superblock {
-    // Superblock magic number
+    /// Superblock magic number
     pub const MAGIC: u64 = 0x2173666e7261656c;
 
+    /// Create a brand new superblock instance
     pub fn new(params: Params) -> Self {
         let block_bits = params.block_size as f64 * 8.;
 
@@ -132,6 +130,17 @@ impl Superblock {
             num_inode_blocks,
             first_data_block_offset,
         }
+    }
+
+    /// Load superblock from raw bytes
+    pub fn load(buf: &[u8]) -> Result<Self, Error> {
+        let sb: Self = bincode::deserialize(buf)?;
+
+        if sb.magic != Superblock::MAGIC {
+            return Err(format_err!("invalid superblock magic: {}", sb.magic));
+        }
+
+        return Ok(sb);
     }
 
     #[inline(always)]

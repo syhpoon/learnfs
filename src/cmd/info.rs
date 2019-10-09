@@ -56,11 +56,7 @@ pub fn fs_info(mut device: impl Device) -> Result<FsInfo, Error> {
     let mut buf: Vec<u8> = vec![0; fs::SUPERBLOCK_SIZE as usize];
     device.read(buf.as_mut_slice())?;
 
-    let sb: fs::Superblock = bincode::deserialize(buf.as_slice())?;
-
-    if sb.magic != Superblock::MAGIC {
-        return Err(format_err!("invalid superblock magic: {}", sb.magic));
-    }
+    let sb = Superblock::load(buf.as_slice())?;
 
     Ok(FsInfo {
         block_size: sb.block_size,

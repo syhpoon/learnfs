@@ -22,47 +22,30 @@
  SOFTWARE.
 */
 
-use std::io::SeekFrom;
+use failure::{Error, format_err};
 
-use failure::Error;
+const MAX_FILE_NAME_LENGTH: usize = 60;
 
-use crate::device::Device;
-use crate::fs;
-use crate::fs::bitmap::Bitmap;
+pub struct DirEntry {
+    // Entry inode number
+    inode: u32,
 
-/// Create a new filesystem on a given device
-pub fn create_fs(mut device: impl Device) -> Result<(), Error> {
-    create_superblock(device)?;
-
-    //TODO
-
-    Ok(())
+    // File name
+    name: [u8; MAX_FILE_NAME_LENGTH],
 }
 
-fn create_superblock(mut device: impl Device) -> Result<(), Error> {
-    let sb_params = fs::superblock::Params {
-        disk_size: device.capacity()?,
-        ..Default::default()
-    };
+impl DirEntry {
+    pub fn new(inode: u32, name: &str) -> Result<Self, Error> {
+        if name.len() > MAX_FILE_NAME_LENGTH {
+            return Err(format_err!("file name too long"));
+        }
 
-    let sb = fs::Superblock::new(sb_params);
+        let mut arr: [u8; MAX_FILE_NAME_LENGTH] = [0u8; MAX_FILE_NAME_LENGTH];
+        arr.copy_from_slice(name.as_bytes());
 
-    // Skip boot block
-    device.seek(SeekFrom::Start(fs::BOOT_BLOCK_SIZE))?;
-
-    // 1. Write superblock
-    let bytes: Vec<u8> = bincode::serialize(&sb)?;
-    device.write(bytes.as_slice())?;
-
-    // 2. Zero inode bitmap
-    let mut inode_bitmap = Bitmap::new(
-        (sb.num_inode_bitmap_blocks * sb.block_size) as usize);
-    device.write_all(inode_bitmap.as_slice())?;
-
-    // 3. Write data bitmap
-    let mut data_bitmap = Bitmap::new(
-        (sb.num_data_bitmap_blocks * sb.block_size) as usize);
-    device.write_all(data_bitmap.as_slice())?;
-
-    Ok(())
+        Ok(DirEntry {
+            inode,
+            name: arr,
+        })
+    }
 }

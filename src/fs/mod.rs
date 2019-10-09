@@ -24,6 +24,8 @@
 
 pub mod inode;
 pub mod superblock;
+pub mod bitmap;
+pub mod dir;
 
 pub use superblock::Superblock;
 
