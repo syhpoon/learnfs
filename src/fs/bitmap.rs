@@ -32,6 +32,8 @@ pub struct Bitmap {
 
 impl Bitmap {
     pub fn new(size: usize) -> Self {
+        assert!(size > 0, "bitmap size cannot be zero");
+
         Bitmap {
             buf: vec![0; size],
             max_bit: size * 8,
@@ -40,6 +42,8 @@ impl Bitmap {
 
     pub fn from_buf(buf: Vec<u8>) -> Self {
         let size = buf.len();
+
+        assert!(size > 0, "bitmap size cannot be zero");
 
         Bitmap {
             buf,
@@ -63,10 +67,28 @@ impl Bitmap {
         self.buf[idx] &= !(1 << off)
     }
 
-    pub fn get(&self, bit: usize) -> bool {
+    pub fn is_set(&self, bit: usize) -> bool {
         let (idx, off) = self.convert(bit);
 
-        return (self.buf[idx] >> off) & 1 > 0
+        return (self.buf[idx] >> off) & 1 > 0;
+    }
+
+    /// Find the next free bit number searching from the given index
+    pub fn next_clear_bit(&mut self, from: usize) -> Option<usize> {
+        let mut scanned = 0;
+        let mut idx = from;
+
+        while scanned <= self.max_bit {
+            scanned += 1;
+
+            if !self.is_set(idx) {
+                return Some(idx);
+            }
+
+            idx = (idx + 1) % self.max_bit;
+        }
+
+        None
     }
 
     /// Convert raw bit number into vector index and an offset
@@ -132,11 +154,31 @@ mod tests {
         let mut b = Bitmap::new(4);
 
         b.set(26);
-        assert!(b.get(26));
+        assert!(b.is_set(26));
 
         assert_eq!(b.buf[0], 0u8);
         assert_eq!(b.buf[1], 0u8);
         assert_eq!(b.buf[2], 0u8);
         assert_eq!(b.buf[3], 4u8);
+    }
+
+    #[test]
+    fn test_bitmap_find_next() {
+        let mut b = Bitmap::new(1);
+
+        assert_eq!(b.next_clear_bit(0), Some(0));
+
+        b.set(0);
+        b.set(1);
+        b.set(2);
+        b.set(3);
+        b.set(4);
+
+        assert_eq!(b.next_clear_bit(0), Some(5));
+
+        b.set(6);
+        b.set(7);
+
+        assert_eq!(b.next_clear_bit(6), Some(5));
     }
 }

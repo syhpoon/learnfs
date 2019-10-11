@@ -22,7 +22,6 @@
  SOFTWARE.
 */
 
-mod cmd;
 mod fs;
 mod device;
 
@@ -32,6 +31,7 @@ use failure::{Error, format_err};
 use nix::sys::stat::{stat, SFlag};
 
 use crate::device::FileDevice;
+use crate::fs::Filesystem;
 
 enum DeviceType {
     File,
@@ -89,7 +89,7 @@ fn main() -> Result<(), Error> {
                     }
 
                     let mut device = FileDevice::new(path, capacity)?;
-                    cmd::create::create_fs(device).unwrap();
+                    fs::Filesystem::create(device).expect("wut");
                 }
                 Ok(DeviceType::Block) => {
                     unimplemented!()
@@ -105,9 +105,9 @@ fn main() -> Result<(), Error> {
             match device_type(path) {
                 Ok(DeviceType::File) => {
                     let device = FileDevice::open(path)?;
-                    let info = cmd::info::fs_info(device)?;
+                    let fs = Filesystem::load(device)?;
 
-                    println!("{:?}", info)
+                    println!("{:#?}", fs.info())
                 }
                 Ok(DeviceType::Block) => {
                     unimplemented!()

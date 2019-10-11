@@ -25,8 +25,8 @@
 use serde::{Serialize, Deserialize};
 use failure::{Error, format_err};
 
-use crate::fs::{BOOT_BLOCK_SIZE, SUPERBLOCK_SIZE};
-use crate::fs::bitmap::Bitmap;
+use super::{BOOT_BLOCK_SIZE, SUPERBLOCK_SIZE};
+use super::Bitmap;
 
 pub struct Params {
     // Disk size in bytes
@@ -76,7 +76,7 @@ pub struct Superblock {
 
 impl Superblock {
     /// Superblock magic number
-    pub const MAGIC: u64 = 0x2173666e7261656c;
+    pub const MAGIC: u64 = 0x0073666e7261656c;
 
     /// Create a brand new superblock instance
     pub fn new(params: Params) -> Self {
