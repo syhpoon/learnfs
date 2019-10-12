@@ -22,12 +22,12 @@
  SOFTWARE.
 */
 
-mod fs;
 mod device;
+mod fs;
 
-use clap::{Arg, App, SubCommand, AppSettings};
 use clap::{crate_version, value_t};
-use failure::{Error, format_err};
+use clap::{App, AppSettings, Arg, SubCommand};
+use failure::{format_err, Error};
 use nix::sys::stat::{stat, SFlag};
 
 use crate::device::FileDevice;
@@ -50,7 +50,7 @@ fn main() -> Result<(), Error> {
                     Arg::with_name("device")
                         .help("Block device to use")
                         .index(1)
-                        .required(true)
+                        .required(true),
                 )
                 .arg(
                     Arg::with_name("capacity")
@@ -58,19 +58,20 @@ fn main() -> Result<(), Error> {
                         .short("c")
                         .long("capacity")
                         .takes_value(true)
-                        .default_value("0")
-                )
-        ).subcommand(
-        SubCommand::with_name("info")
-            .about("Show existing filesystem info")
-            .setting(AppSettings::DisableVersion)
-            .arg(
-                Arg::with_name("device")
-                    .help("Block device to use")
-                    .index(1)
-                    .required(true)
-            )
-    );
+                        .default_value("0"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("info")
+                .about("Show existing filesystem info")
+                .setting(AppSettings::DisableVersion)
+                .arg(
+                    Arg::with_name("device")
+                        .help("Block device to use")
+                        .index(1)
+                        .required(true),
+                ),
+        );
 
     let help = extract_help(&app);
 
@@ -80,20 +81,18 @@ fn main() -> Result<(), Error> {
 
             match device_type(path) {
                 Ok(DeviceType::File) => {
-                    let capacity = value_t!(create_match,
-                     "capacity", u64).unwrap();
+                    let capacity = value_t!(create_match, "capacity", u64).unwrap();
 
                     if capacity == 0 {
                         return Err(format_err!(
-                         "please explicitly specify file device capacity"));
+                            "please explicitly specify file device capacity"
+                        ));
                     }
 
-                    let mut device = FileDevice::new(path, capacity)?;
+                    let device = FileDevice::new(path, capacity)?;
                     fs::Filesystem::create(device).expect("wut");
                 }
-                Ok(DeviceType::Block) => {
-                    unimplemented!()
-                }
+                Ok(DeviceType::Block) => unimplemented!(),
                 Err(e) => {
                     return Err(e);
                 }
@@ -109,9 +108,7 @@ fn main() -> Result<(), Error> {
 
                     println!("{:#?}", fs.info())
                 }
-                Ok(DeviceType::Block) => {
-                    unimplemented!()
-                }
+                Ok(DeviceType::Block) => unimplemented!(),
                 Err(e) => {
                     return Err(e);
                 }
@@ -137,20 +134,14 @@ fn device_type(path: &str) -> Result<DeviceType, Error> {
         Ok(st) => {
             match SFlag::from_bits(st.st_mode & SFlag::S_IFMT.bits()) {
                 // Block device
-                Some(SFlag::S_IFBLK) => {
-                    Ok(DeviceType::Block)
-                }
+                Some(SFlag::S_IFBLK) => Ok(DeviceType::Block),
                 // Regular file
-                Some(SFlag::S_IFREG) => {
-                    Ok(DeviceType::File)
-                }
-                _ => {
-                    Err(format_err!("Only block devices and regular files are currently supported"))
-                }
+                Some(SFlag::S_IFREG) => Ok(DeviceType::File),
+                _ => Err(format_err!(
+                    "Only block devices and regular files are currently supported"
+                )),
             }
         }
-        Err(e) => {
-            Err(format_err!("Failed to read device stat: {}", e))
-        }
+        Err(e) => Err(format_err!("Failed to read device stat: {}", e)),
     }
 }

@@ -26,8 +26,8 @@ use std::io::SeekFrom;
 
 use failure::Error;
 
-use crate::device::Device;
 use super::{Bitmap, Superblock};
+use crate::device::Device;
 use crate::fs;
 
 #[derive(Debug)]
@@ -59,19 +59,20 @@ pub struct Filesystem<T: Device> {
 
 impl<T: Device> Filesystem<T> {
     /// Create a new filesystem on a given device.
-    /// All existing data on the device will be erased.
+    /// Existing data on the device will become corrupted/unavailable.
     pub fn create(mut device: T) -> Result<Self, Error> {
-        // Create a superblock first
-        let sb = Filesystem::create_superblock(&mut device)?;
+        // Skip boot block
+        device.seek(SeekFrom::Start(fs::BOOT_BLOCK_SIZE))?;
 
-        // Zero inode bitmap
-        let mut inode_bitmap = Bitmap::new(
-            (sb.num_inode_bitmap_blocks * sb.block_size) as usize);
+        // Write the superblock first
+        let sb = Filesystem::write_superblock(&mut device)?;
+
+        // Write inode bitmap
+        let inode_bitmap = Bitmap::new(sb.inode_bitmap_size());
         device.write_all(inode_bitmap.as_slice())?;
 
-        // Zero data bitmap
-        let mut data_bitmap = Bitmap::new(
-            (sb.num_data_bitmap_blocks * sb.block_size) as usize);
+        // Write data bitmap
+        let data_bitmap = Bitmap::new(sb.data_bitmap_size());
         device.write_all(data_bitmap.as_slice())?;
 
         // Next create a root directory
@@ -90,7 +91,7 @@ impl<T: Device> Filesystem<T> {
         Ok(fs)
     }
 
-    /// Load an existing filesystem from a device
+    /// Load existing filesystem from a device
     pub fn load(mut device: T) -> Result<Self, Error> {
         // Skip boot block
         device.seek(SeekFrom::Start(fs::BOOT_BLOCK_SIZE))?;
@@ -100,9 +101,12 @@ impl<T: Device> Filesystem<T> {
 
         let sb = Superblock::load(buf.as_slice())?;
 
-        // TODO: Load bitmaps
-        let inode_bitmap = Bitmap::new(1);
-        let data_bitmap = Bitmap::new(1);
+        // Load bitmaps
+        let inode_bitmap = Filesystem::load_bitmap(sb.inode_bitmap_size(),
+                                                   &mut device)?;
+
+        let data_bitmap = Filesystem::load_bitmap(sb.data_bitmap_size(),
+                                                  &mut device)?;
 
         let fs = Filesystem {
             device,
@@ -126,7 +130,7 @@ impl<T: Device> Filesystem<T> {
         }
     }
 
-    fn create_superblock(device: &mut T) -> Result<Superblock, Error> {
+    fn write_superblock(device: &mut T) -> Result<Superblock, Error> {
         let sb_params = fs::superblock::Params {
             disk_size: device.capacity()?,
             ..Default::default()
@@ -134,13 +138,18 @@ impl<T: Device> Filesystem<T> {
 
         let sb = fs::Superblock::new(sb_params);
 
-        // Skip boot block
-        device.seek(SeekFrom::Start(fs::BOOT_BLOCK_SIZE))?;
-
         // Write superblock
         let bytes: Vec<u8> = bincode::serialize(&sb)?;
         device.write(bytes.as_slice())?;
 
         Ok(sb)
+    }
+
+    fn load_bitmap(size: usize, device: &mut T) -> Result<Bitmap, Error> {
+        let mut buf: Vec<u8> = vec![0; size];
+
+        device.read(buf.as_mut_slice())?;
+
+        Ok(Bitmap::from_buf(buf))
     }
 }

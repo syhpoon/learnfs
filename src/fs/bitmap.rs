@@ -22,8 +22,6 @@
  SOFTWARE.
 */
 
-use failure::{Error, format_err};
-
 #[derive(PartialEq, Debug, Default)]
 pub struct Bitmap {
     buf: Vec<u8>,
@@ -180,5 +178,8 @@ mod tests {
         b.set(7);
 
         assert_eq!(b.next_clear_bit(6), Some(5));
+
+        b.set(5);
+        assert_eq!(b.next_clear_bit(0), None);
     }
 }

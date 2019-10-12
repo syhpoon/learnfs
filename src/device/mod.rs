@@ -36,4 +36,3 @@ pub trait Device: io::Write + io::Read + io::Seek {
     /// Return device capacity in bytes
     fn capacity(&mut self) -> Result<u64, Error>;
 }
-

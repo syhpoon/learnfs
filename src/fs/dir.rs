@@ -22,7 +22,7 @@
  SOFTWARE.
 */
 
-use failure::{Error, format_err};
+use failure::{format_err, Error};
 
 const MAX_FILE_NAME_LENGTH: usize = 60;
 
@@ -43,9 +43,6 @@ impl DirEntry {
         let mut arr: [u8; MAX_FILE_NAME_LENGTH] = [0u8; MAX_FILE_NAME_LENGTH];
         arr.copy_from_slice(name.as_bytes());
 
-        Ok(DirEntry {
-            inode,
-            name: arr,
-        })
+        Ok(DirEntry { inode, name: arr })
     }
 }

@@ -23,13 +23,13 @@
 */
 
 pub mod bitmap;
-pub mod fs;
 pub mod dir;
+pub mod fs;
 pub mod inode;
 pub mod superblock;
 
-pub use fs::Filesystem;
 pub use bitmap::Bitmap;
+pub use fs::Filesystem;
 pub use superblock::Superblock;
 
 pub const BOOT_BLOCK_SIZE: u64 = 1024;

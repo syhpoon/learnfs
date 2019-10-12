@@ -28,7 +28,7 @@ use std::io;
 use failure::Error;
 
 use crate::device::Device;
-use std::fs::{OpenOptions, File};
+use std::fs::{File, OpenOptions};
 
 /// Implements Device abstraction on top of an existing file
 pub struct FileDevice {
@@ -39,7 +39,7 @@ pub struct FileDevice {
 impl FileDevice {
     /// Instantiate new FileDevice from a file path
     pub fn new(path: &str, capacity: u64) -> Result<Self, Error> {
-        let mut file = OpenOptions::new()
+        let file = OpenOptions::new()
             .write(true)
             .truncate(true)
             .create(true)
@@ -48,7 +48,7 @@ impl FileDevice {
         Ok(FileDevice { file, capacity })
     }
 
-    /// Open existing files
+    /// Open existing file
     pub fn open(path: &str) -> Result<Self, Error> {
         let file = File::open(path)?;
 
@@ -83,4 +83,3 @@ impl io::Read for FileDevice {
         return self.file.read(buf);
     }
 }
-
