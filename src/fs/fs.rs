@@ -24,11 +24,12 @@
 
 use std::io::SeekFrom;
 
-use failure::Error;
+use failure::{Error, format_err};
 
-use super::{Bitmap, Superblock};
+use super::{Bitmap, Inode, Superblock};
 use crate::device::Device;
 use crate::fs;
+use crate::fs::inode::{InodeType, InodePerm};
 
 #[derive(Debug)]
 pub struct FsInfo {
@@ -55,6 +56,7 @@ pub struct Filesystem<T: Device> {
     superblock: Superblock,
     inode_bitmap: Bitmap,
     data_bitmap: Bitmap,
+    next_free_inode: Option<usize>,
 }
 
 impl<T: Device> Filesystem<T> {
@@ -64,29 +66,42 @@ impl<T: Device> Filesystem<T> {
         // Skip boot block
         device.seek(SeekFrom::Start(fs::BOOT_BLOCK_SIZE))?;
 
-        // Write the superblock first
-        let sb = Filesystem::write_superblock(&mut device)?;
+        // Create superblock
+        let superblock = Filesystem::create_superblock(&mut device)?;
 
         // Write inode bitmap
-        let inode_bitmap = Bitmap::new(sb.inode_bitmap_size());
+        let inode_bitmap = Bitmap::new(superblock.inode_bitmap_size());
         device.write_all(inode_bitmap.as_slice())?;
 
         // Write data bitmap
-        let data_bitmap = Bitmap::new(sb.data_bitmap_size());
+        let data_bitmap = Bitmap::new(superblock.data_bitmap_size());
         device.write_all(data_bitmap.as_slice())?;
 
-        // Next create a root directory
-        // TODO
-        // 1. Get the next free inode
-        // 2. Allocate a new block
-        // 3. Add two dir entries: . and ..
-
-        let fs = Filesystem {
+        let mut fs = Filesystem {
             device,
             inode_bitmap,
             data_bitmap,
-            superblock: sb,
+            superblock,
+            next_free_inode: Some(0),
         };
+
+        // We need to have a root directory on a newly created filesystem
+        let mut inode = fs.allocate_inode()?;
+
+        inode.set_type(InodeType::Directory);
+        inode.set_perm(
+            InodePerm(
+                InodePerm::owner_read_write_execute() |
+                    InodePerm::group_read() |
+                    InodePerm::group_execute() |
+                    InodePerm::others_read() |
+                    InodePerm::others_execute()));
+
+        /*
+        let dir = Directory::new(inode);
+        dir.add_entry(".", inode);
+        dir.add_entry("..", inode);
+               */
 
         Ok(fs)
     }
@@ -102,17 +117,20 @@ impl<T: Device> Filesystem<T> {
         let sb = Superblock::load(buf.as_slice())?;
 
         // Load bitmaps
-        let inode_bitmap = Filesystem::load_bitmap(sb.inode_bitmap_size(),
-                                                   &mut device)?;
+        let mut inode_bitmap = Filesystem::load_bitmap(sb.inode_bitmap_size(),
+                                                       &mut device)?;
 
-        let data_bitmap = Filesystem::load_bitmap(sb.data_bitmap_size(),
-                                                  &mut device)?;
+        let mut data_bitmap = Filesystem::load_bitmap(sb.data_bitmap_size(),
+                                                      &mut device)?;
+
+        let next_free_inode = inode_bitmap.next_clear_bit(0);
 
         let fs = Filesystem {
+            superblock: sb,
             device,
             inode_bitmap,
             data_bitmap,
-            superblock: sb,
+            next_free_inode,
         };
 
         Ok(fs)
@@ -130,7 +148,7 @@ impl<T: Device> Filesystem<T> {
         }
     }
 
-    fn write_superblock(device: &mut T) -> Result<Superblock, Error> {
+    fn create_superblock(device: &mut T) -> Result<Superblock, Error> {
         let sb_params = fs::superblock::Params {
             disk_size: device.capacity()?,
             ..Default::default()
@@ -151,5 +169,20 @@ impl<T: Device> Filesystem<T> {
         device.read(buf.as_mut_slice())?;
 
         Ok(Bitmap::from_buf(buf))
+    }
+
+    fn allocate_inode(&mut self) -> Result<Inode, Error> {
+        let idx = match self.next_free_inode {
+            Some(idx) => idx,
+            None => return Err(format_err!("no free inodes left"))
+        };
+
+        // Mark inode as used
+        self.inode_bitmap.set(idx);
+
+        let mut inode = Inode::new(idx as u32);
+        self.next_free_inode = self.inode_bitmap.next_clear_bit(idx);
+
+        Ok(inode)
     }
 }

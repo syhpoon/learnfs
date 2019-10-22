@@ -30,6 +30,7 @@ pub mod superblock;
 
 pub use bitmap::Bitmap;
 pub use fs::Filesystem;
+pub use inode::Inode;
 pub use superblock::Superblock;
 
 pub const BOOT_BLOCK_SIZE: u64 = 1024;

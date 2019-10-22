@@ -47,7 +47,7 @@ impl Default for Params {
             disk_size: 0,
             bytes_inodes_ratio: 16384,
             block_size: 4096,
-            inode_size: 64,
+            inode_size: 128,
         }
     }
 }
