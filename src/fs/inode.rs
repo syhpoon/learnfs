@@ -23,7 +23,10 @@
 */
 
 use nix::sys::stat::{mode_t, SFlag, Mode};
+use failure::{Error, format_err};
 use lazy_static;
+
+use super::types::*;
 
 pub const DIRECT_BLOCKS_NUM: usize = 21;
 
@@ -181,7 +184,7 @@ pub struct Inode {
     // File type and mode
     pub mode: mode_t,
     // Inode number
-    pub ino: u32,
+    pub ino: InodePtr,
     // Number of directories containing this inode
     pub n_link: u32,
     // Owner's user id
@@ -206,7 +209,7 @@ pub struct Inode {
 
 impl Inode {
     /// Create a new empty inode
-    pub fn new(ino: u32) -> Self {
+    pub fn new(ino: InodePtr) -> Self {
         Inode {
             ino,
             mode: 0,
@@ -241,6 +244,26 @@ impl Inode {
     /// Return inode permissions
     pub fn get_perm(&self) -> InodePerm {
         InodePerm(self.mode & !*S_IFMT)
+    }
+
+    /// Return a vector of allocated block ids
+    pub fn get_blocks(&self) -> Vec<u32> {
+        self.blocks.iter().filter(|&b| *b != 0)
+            .cloned()
+            .collect::<Vec<u32>>()
+    }
+
+    /// Adds a given block to the inode
+    pub fn add_block(&mut self, block_idx: BlockPtr) -> Result<(), Error> {
+        match self.blocks.iter().position(|&x| x == 0) {
+            Some(idx) => {
+                self.blocks[idx] = block_idx;
+
+                Ok(())
+            }
+            //TODO: Allocate secondary blocks
+            None => Err(format_err!("TODO: all inode blocks are taken"))
+        }
     }
 }
 

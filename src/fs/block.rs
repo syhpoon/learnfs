@@ -22,23 +22,32 @@
  SOFTWARE.
 */
 
-pub mod bitmap;
-pub mod block;
-pub mod dir;
-pub mod dir_entry;
-pub mod fs;
-pub mod fs_info;
-pub mod inode;
-pub mod superblock;
-pub mod types;
+use super::types::BlockPtr;
 
-pub use bitmap::Bitmap;
-pub use block::Block;
-pub use dir::Directory;
-pub use fs::Filesystem;
-pub use inode::Inode;
-pub use superblock::Superblock;
-pub use types::*;
+/// Block structure represents a single block of data
+pub struct Block {
+    pub idx: BlockPtr,
+    pub data: Vec<u8>,
+}
 
-pub const BOOT_BLOCK_SIZE: u64 = 1024;
-pub const SUPERBLOCK_SIZE: u64 = 1024;
+impl Block {
+    /// Create an empty block of a given size
+    pub fn new(idx: BlockPtr, size: usize) -> Self {
+        Block {
+            idx,
+            data: vec![0u8; size],
+        }
+    }
+
+    /// Create a block from existing data
+    pub fn from_buf(idx: BlockPtr, buf: Vec<u8>) -> Self {
+        Block {
+            idx,
+            data: buf,
+        }
+    }
+
+    pub fn size(&self) -> usize {
+        self.data.len()
+    }
+}

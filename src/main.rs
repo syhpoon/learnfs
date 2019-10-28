@@ -24,6 +24,8 @@
 
 #[macro_use]
 extern crate lazy_static;
+#[macro_use]
+extern crate serde_big_array;
 
 mod device;
 mod fs;

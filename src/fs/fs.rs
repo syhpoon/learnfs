@@ -23,31 +23,18 @@
 */
 
 use std::io::SeekFrom;
+use std::collections::HashMap;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 use failure::{Error, format_err};
 
-use super::{Bitmap, Inode, Superblock};
-use crate::device::Device;
 use crate::fs;
-use crate::fs::inode::{InodeType, InodePerm};
-
-#[derive(Debug)]
-pub struct FsInfo {
-    // FS block size
-    pub block_size: u32,
-    // Total number of inodes
-    pub num_inodes: u32,
-    // Size of the inode
-    pub inode_size: u32,
-    // Number of inode bitmap blocks
-    pub num_inode_bitmap_blocks: u32,
-    // Number of data bitmap blocks
-    pub num_data_bitmap_blocks: u32,
-    // Number of inode blocks
-    pub num_inode_blocks: u32,
-    // The offset of the first block containing data in bytes
-    pub first_data_block_offset: u64,
-}
+use crate::device::Device;
+use super::types::*;
+use super::{Bitmap, Block, Directory, Inode, Superblock};
+use super::inode::{InodeType, InodePerm};
+use super::fs_info::FsInfo;
 
 /// Filesystem structure is the main entry point to all
 /// the filesystem operations
@@ -57,11 +44,13 @@ pub struct Filesystem<T: Device> {
     inode_bitmap: Bitmap,
     data_bitmap: Bitmap,
     next_free_inode: Option<usize>,
+    next_free_block: Option<usize>,
+    block_cache: HashMap<BlockPtr, Rc<RefCell<Block>>>,
 }
 
 impl<T: Device> Filesystem<T> {
     /// Create a new filesystem on a given device.
-    /// Existing data on the device will become corrupted/unavailable.
+    /// Existing data on the device will be destroyed.
     pub fn create(mut device: T) -> Result<Self, Error> {
         // Skip boot block
         device.seek(SeekFrom::Start(fs::BOOT_BLOCK_SIZE))?;
@@ -70,11 +59,17 @@ impl<T: Device> Filesystem<T> {
         let superblock = Filesystem::create_superblock(&mut device)?;
 
         // Write inode bitmap
-        let inode_bitmap = Bitmap::new(superblock.inode_bitmap_size());
+        let mut inode_bitmap = Bitmap::new(superblock.inode_bitmap_size());
+
+        // Zeroth inode is not available
+        inode_bitmap.set(0);
         device.write_all(inode_bitmap.as_slice())?;
 
         // Write data bitmap
-        let data_bitmap = Bitmap::new(superblock.data_bitmap_size());
+        let mut data_bitmap = Bitmap::new(superblock.data_bitmap_size());
+
+        // Zeroth block is not available
+        data_bitmap.set(0);
         device.write_all(data_bitmap.as_slice())?;
 
         let mut fs = Filesystem {
@@ -82,7 +77,9 @@ impl<T: Device> Filesystem<T> {
             inode_bitmap,
             data_bitmap,
             superblock,
-            next_free_inode: Some(0),
+            next_free_inode: Some(1),
+            next_free_block: Some(1),
+            block_cache: HashMap::new(),
         };
 
         // We need to have a root directory on a newly created filesystem
@@ -97,11 +94,20 @@ impl<T: Device> Filesystem<T> {
                     InodePerm::others_read() |
                     InodePerm::others_execute()));
 
-        /*
-        let dir = Directory::new(inode);
-        dir.add_entry(".", inode);
-        dir.add_entry("..", inode);
-               */
+        let block = fs.allocate_block()?;
+
+        // The inode now has one data block
+        inode.add_block(block.idx)?;
+
+        // Put block into cache
+        fs.put_block(Rc::new(RefCell::new(block)));
+
+        let mut dir = Directory::load(&inode, &mut fs)?;
+
+        dir.add_entry(String::from("."), inode.ino);
+        dir.add_entry(String::from(".."), inode.ino);
+
+        //fs.save_dir(dir)?;
 
         Ok(fs)
     }
@@ -124,13 +130,16 @@ impl<T: Device> Filesystem<T> {
                                                       &mut device)?;
 
         let next_free_inode = inode_bitmap.next_clear_bit(0);
+        let next_free_block = data_bitmap.next_clear_bit(0);
 
         let fs = Filesystem {
-            superblock: sb,
             device,
             inode_bitmap,
             data_bitmap,
             next_free_inode,
+            next_free_block,
+            superblock: sb,
+            block_cache: HashMap::new(),
         };
 
         Ok(fs)
@@ -180,9 +189,63 @@ impl<T: Device> Filesystem<T> {
         // Mark inode as used
         self.inode_bitmap.set(idx);
 
-        let mut inode = Inode::new(idx as u32);
+        let inode = Inode::new(idx as u32);
         self.next_free_inode = self.inode_bitmap.next_clear_bit(idx);
 
         Ok(inode)
+    }
+
+    fn allocate_block(&mut self) -> Result<Block, Error> {
+        let idx = match self.next_free_block {
+            Some(idx) => idx,
+            None => return Err(format_err!("no free blocks left"))
+        };
+
+        // Mark block as used
+        self.data_bitmap.set(idx);
+
+        let block = Block::new(idx as u32,
+                               self.superblock.block_size as usize);
+        self.next_free_block = self.data_bitmap.next_clear_bit(idx);
+
+        Ok(block)
+    }
+
+    #[inline(always)]
+    fn block_offset(&self, block: BlockPtr) -> u64 {
+        self.superblock.first_data_block_offset +
+            (block * self.superblock.block_size) as u64
+    }
+
+    /// Put block into a cache
+    fn put_block(&mut self, block: Rc<RefCell<Block>>) {
+        let idx = block.borrow().idx;
+        self.block_cache.insert(idx, block);
+    }
+
+    /// Return a given block.
+    /// The block will either be returned from a cache or loaded from device
+    pub fn get_block(&mut self, idx: BlockPtr) -> Result<
+        Rc<RefCell<Block>>, Error> {
+        match self.block_cache.get_mut(&idx) {
+            Some(block) => Ok(Rc::clone(&block)),
+            None => {
+                // Load from device
+                let mut buf: Vec<u8> = vec![
+                    0; self.superblock.block_size as usize];
+
+                self.device.seek(SeekFrom::Start(self.block_offset(idx)))?;
+                self.device.read(buf.as_mut_slice())?;
+
+                let block = Block::from_buf(idx, buf);
+
+                let brc = Rc::new(RefCell::new(block));
+                let res = Rc::clone(&brc);
+
+                self.put_block(brc);
+
+                Ok(res)
+            }
+        }
     }
 }

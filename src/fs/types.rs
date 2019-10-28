@@ -22,23 +22,8 @@
  SOFTWARE.
 */
 
-pub mod bitmap;
-pub mod block;
-pub mod dir;
-pub mod dir_entry;
-pub mod fs;
-pub mod fs_info;
-pub mod inode;
-pub mod superblock;
-pub mod types;
+/// Block pointer
+pub type BlockPtr = u32;
 
-pub use bitmap::Bitmap;
-pub use block::Block;
-pub use dir::Directory;
-pub use fs::Filesystem;
-pub use inode::Inode;
-pub use superblock::Superblock;
-pub use types::*;
-
-pub const BOOT_BLOCK_SIZE: u64 = 1024;
-pub const SUPERBLOCK_SIZE: u64 = 1024;
+/// Inode pointer
+pub type InodePtr = u32;

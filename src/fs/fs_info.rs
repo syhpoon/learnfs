@@ -22,23 +22,21 @@
  SOFTWARE.
 */
 
-pub mod bitmap;
-pub mod block;
-pub mod dir;
-pub mod dir_entry;
-pub mod fs;
-pub mod fs_info;
-pub mod inode;
-pub mod superblock;
-pub mod types;
+#[derive(Debug)]
+pub struct FsInfo {
+    // FS block size
+    pub block_size: u32,
+    // Total number of inodes
+    pub num_inodes: u32,
+    // Size of the inode
+    pub inode_size: u32,
+    // Number of inode bitmap blocks
+    pub num_inode_bitmap_blocks: u32,
+    // Number of data bitmap blocks
+    pub num_data_bitmap_blocks: u32,
+    // Number of inode blocks
+    pub num_inode_blocks: u32,
+    // The offset of the first block containing data in bytes
+    pub first_data_block_offset: u64,
+}
 
-pub use bitmap::Bitmap;
-pub use block::Block;
-pub use dir::Directory;
-pub use fs::Filesystem;
-pub use inode::Inode;
-pub use superblock::Superblock;
-pub use types::*;
-
-pub const BOOT_BLOCK_SIZE: u64 = 1024;
-pub const SUPERBLOCK_SIZE: u64 = 1024;

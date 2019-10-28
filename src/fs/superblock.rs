@@ -139,11 +139,6 @@ impl Superblock {
         return Ok(sb);
     }
 
-    #[inline(always)]
-    pub fn block_offset(&self, block: u32) -> u64 {
-        self.first_data_block_offset + (block * self.block_size) as u64
-    }
-
     pub fn inode_bitmap_size(&self) -> usize {
         (self.num_inode_bitmap_blocks * self.block_size) as usize
     }
