@@ -22,9 +22,10 @@
  SOFTWARE.
 */
 
-use nix::sys::stat::{mode_t, SFlag, Mode};
 use failure::{Error, format_err};
 use lazy_static;
+use nix::sys::stat::{mode_t, SFlag, Mode};
+use serde::{Deserialize, Serialize};
 
 use super::types::*;
 
@@ -179,7 +180,7 @@ impl InodeType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Inode {
     // File type and mode
     pub mode: mode_t,
@@ -200,11 +201,14 @@ pub struct Inode {
     // Status change time
     pub ctime: u32,
     // Direct block pointers
-    blocks: [u32; DIRECT_BLOCKS_NUM],
+    blocks: [BlockPtr; DIRECT_BLOCKS_NUM],
     // Single indirect block pointers
     indirect_block: u32,
     // Double indirect block pointers
     double_indirect_block: u32,
+    // Dirty flag indicates if inode has been modified
+    #[serde(skip)]
+    dirty: bool,
 }
 
 impl Inode {
@@ -223,6 +227,7 @@ impl Inode {
             blocks: [0u32; DIRECT_BLOCKS_NUM],
             indirect_block: 0,
             double_indirect_block: 0,
+            dirty: false,
         }
     }
 
@@ -247,10 +252,10 @@ impl Inode {
     }
 
     /// Return a vector of allocated block ids
-    pub fn get_blocks(&self) -> Vec<u32> {
+    pub fn get_blocks(&self) -> Vec<BlockPtr> {
         self.blocks.iter().filter(|&b| *b != 0)
             .cloned()
-            .collect::<Vec<u32>>()
+            .collect::<Vec<BlockPtr>>()
     }
 
     /// Adds a given block to the inode
@@ -264,6 +269,14 @@ impl Inode {
             //TODO: Allocate secondary blocks
             None => Err(format_err!("TODO: all inode blocks are taken"))
         }
+    }
+
+    pub fn set_dirty(&mut self, dirty: bool) {
+        self.dirty = dirty
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
     }
 }
 

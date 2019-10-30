@@ -30,7 +30,7 @@ use failure::Error;
 use crate::device::Device;
 use std::fs::{File, OpenOptions};
 
-/// Implements Device abstraction on top of an existing file
+/// Implements Device abstraction on top of a file
 pub struct FileDevice {
     file: fs::File,
     capacity: u64,

@@ -28,6 +28,7 @@ use super::types::BlockPtr;
 pub struct Block {
     pub idx: BlockPtr,
     pub data: Vec<u8>,
+    pub dirty: bool,
 }
 
 impl Block {
@@ -36,6 +37,7 @@ impl Block {
         Block {
             idx,
             data: vec![0u8; size],
+            dirty: false,
         }
     }
 
@@ -44,10 +46,19 @@ impl Block {
         Block {
             idx,
             data: buf,
+            dirty: false,
         }
     }
 
     pub fn size(&self) -> usize {
         self.data.len()
+    }
+
+    pub fn set_dirty(&mut self, dirty: bool) {
+        self.dirty = dirty
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
     }
 }

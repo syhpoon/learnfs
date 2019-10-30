@@ -69,6 +69,8 @@ pub struct Superblock {
     pub num_data_bitmap_blocks: u32,
     // Number of inode blocks
     pub num_inode_blocks: u32,
+    // The offset of the first block containing inode in bytes
+    pub first_inode_block_offset: u64,
     // The offset of the first block containing data in bytes
     pub first_data_block_offset: u64,
 }
@@ -110,10 +112,12 @@ impl Superblock {
         // How many data bitmap blocks are needed to map data blocks
         let num_data_bitmap_blocks = (num_data_blocks as f64 / block_bits).ceil() as u32;
 
-        let first_data_block_offset = BOOT_BLOCK_SIZE
+        let first_inode_block_offset = BOOT_BLOCK_SIZE
             + SUPERBLOCK_SIZE
             + (num_inode_bitmap_blocks * params.block_size) as u64
-            + (num_data_bitmap_blocks * params.block_size) as u64
+            + (num_data_bitmap_blocks * params.block_size) as u64;
+
+        let first_data_block_offset = first_inode_block_offset
             + (num_inode_blocks * params.block_size) as u64;
 
         Superblock {
@@ -124,6 +128,7 @@ impl Superblock {
             num_inode_bitmap_blocks,
             num_data_bitmap_blocks,
             num_inode_blocks,
+            first_inode_block_offset,
             first_data_block_offset,
         }
     }

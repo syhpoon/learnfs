@@ -23,7 +23,7 @@
 */
 
 use std::io::SeekFrom;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -46,6 +46,8 @@ pub struct Filesystem<T: Device> {
     next_free_inode: Option<usize>,
     next_free_block: Option<usize>,
     block_cache: HashMap<BlockPtr, Rc<RefCell<Block>>>,
+    inode_cache: HashMap<InodePtr, Rc<RefCell<Inode>>>,
+    //dir_cache: HashMap<InodePtr, Rc<RefCell<Inode>>>,
 }
 
 impl<T: Device> Filesystem<T> {
@@ -79,11 +81,13 @@ impl<T: Device> Filesystem<T> {
             superblock,
             next_free_inode: Some(1),
             next_free_block: Some(1),
+            inode_cache: HashMap::new(),
             block_cache: HashMap::new(),
         };
 
         // We need to have a root directory on a newly created filesystem
         let mut inode = fs.allocate_inode()?;
+        inode.set_dirty(true);
 
         inode.set_type(InodeType::Directory);
         inode.set_perm(
@@ -104,10 +108,15 @@ impl<T: Device> Filesystem<T> {
 
         let mut dir = Directory::load(&inode, &mut fs)?;
 
-        dir.add_entry(String::from("."), inode.ino);
-        dir.add_entry(String::from(".."), inode.ino);
+        dir.add_entry(String::from("."), inode.ino, &mut fs)?;
+        dir.add_entry(String::from(".."), inode.ino, &mut fs)?;
 
-        //fs.save_dir(dir)?;
+        fs.put_inode(Rc::new(RefCell::new(inode)));
+
+        //TODO: Add dir to cache?
+
+        // Flush changes to device
+        fs.flush()?;
 
         Ok(fs)
     }
@@ -140,6 +149,7 @@ impl<T: Device> Filesystem<T> {
             next_free_block,
             superblock: sb,
             block_cache: HashMap::new(),
+            inode_cache: HashMap::new(),
         };
 
         Ok(fs)
@@ -212,15 +222,27 @@ impl<T: Device> Filesystem<T> {
     }
 
     #[inline(always)]
-    fn block_offset(&self, block: BlockPtr) -> u64 {
+    fn block_offset(&self, block_idx: BlockPtr) -> u64 {
         self.superblock.first_data_block_offset +
-            (block * self.superblock.block_size) as u64
+            (block_idx * self.superblock.block_size) as u64
+    }
+
+    #[inline(always)]
+    fn inode_offset(&self, inode_idx: InodePtr) -> u64 {
+        self.superblock.first_inode_block_offset +
+            (inode_idx * self.superblock.inode_size) as u64
     }
 
     /// Put block into a cache
     fn put_block(&mut self, block: Rc<RefCell<Block>>) {
         let idx = block.borrow().idx;
         self.block_cache.insert(idx, block);
+    }
+
+    /// Put inode into a cache
+    fn put_inode(&mut self, inode: Rc<RefCell<Inode>>) {
+        let idx = inode.borrow().ino;
+        self.inode_cache.insert(idx, inode);
     }
 
     /// Return a given block.
@@ -230,6 +252,7 @@ impl<T: Device> Filesystem<T> {
         match self.block_cache.get_mut(&idx) {
             Some(block) => Ok(Rc::clone(&block)),
             None => {
+                println!("get_block ---------- idx={}", idx);
                 // Load from device
                 let mut buf: Vec<u8> = vec![
                     0; self.superblock.block_size as usize];
@@ -247,5 +270,54 @@ impl<T: Device> Filesystem<T> {
                 Ok(res)
             }
         }
+    }
+
+    fn flush(&mut self) -> Result<(), Error> {
+        let mut blocks: VecDeque<Rc<RefCell<Block>>> = VecDeque::new();
+        let mut inodes: VecDeque<Rc<RefCell<Inode>>> = VecDeque::new();
+
+        for cell in self.block_cache.values() {
+            if cell.borrow().is_dirty() {
+                blocks.push_back(Rc::clone(&cell));
+            }
+        }
+
+        for cell in self.inode_cache.values() {
+            if cell.borrow().is_dirty() {
+                inodes.push_back(Rc::clone(&cell));
+            }
+
+            //TODO: inode blocks?
+        }
+
+        for cell in blocks {
+            let mut block = cell.borrow_mut();
+            self.flush_block(&block)?;
+            block.set_dirty(false);
+        };
+
+        for cell in inodes {
+            let mut inode = cell.borrow_mut();
+            self.flush_inode(&inode)?;
+            inode.set_dirty(false);
+        };
+
+        Ok(())
+    }
+
+    fn flush_block(&mut self, block: &Block) -> Result<(), Error> {
+        self.device.seek(SeekFrom::Start(self.block_offset(block.idx)))?;
+        self.device.write(block.data.as_slice())?;
+
+        Ok(())
+    }
+
+    fn flush_inode(&mut self, inode: &Inode) -> Result<(), Error> {
+        let bytes: Vec<u8> = bincode::serialize(&inode)?;
+        self.device.seek(SeekFrom::Start(self.inode_offset(inode.ino)))?;
+
+        (&mut self.device).write(bytes.as_slice())?;
+
+        Ok(())
     }
 }

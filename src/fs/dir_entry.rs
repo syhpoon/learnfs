@@ -50,12 +50,13 @@ impl DirEntry {
     pub const SIZE: usize = 64;
 
     pub fn new(inode: InodePtr, name: &str) -> Result<Self, Error> {
-        if name.len() > MAX_FILE_NAME_SIZE {
+        let len = name.len();
+        if len > MAX_FILE_NAME_SIZE {
             return Err(format_err!("file name too long"));
         }
 
         let mut arr: [u8; MAX_FILE_NAME_SIZE] = [0u8; MAX_FILE_NAME_SIZE];
-        arr.copy_from_slice(name.as_bytes());
+        (&mut arr[..len]).copy_from_slice(name.as_bytes());
 
         Ok(DirEntry { inode, name: arr })
     }
