@@ -163,6 +163,7 @@ impl<T: Device> Filesystem<T> {
             num_inode_bitmap_blocks: self.superblock.num_inode_bitmap_blocks,
             num_data_bitmap_blocks: self.superblock.num_data_bitmap_blocks,
             num_inode_blocks: self.superblock.num_inode_blocks,
+            first_inode_block_offset: self.superblock.first_inode_block_offset,
             first_data_block_offset: self.superblock.first_data_block_offset,
         }
     }
@@ -252,7 +253,6 @@ impl<T: Device> Filesystem<T> {
         match self.block_cache.get_mut(&idx) {
             Some(block) => Ok(Rc::clone(&block)),
             None => {
-                println!("get_block ---------- idx={}", idx);
                 // Load from device
                 let mut buf: Vec<u8> = vec![
                     0; self.superblock.block_size as usize];
@@ -315,8 +315,7 @@ impl<T: Device> Filesystem<T> {
     fn flush_inode(&mut self, inode: &Inode) -> Result<(), Error> {
         let bytes: Vec<u8> = bincode::serialize(&inode)?;
         self.device.seek(SeekFrom::Start(self.inode_offset(inode.ino)))?;
-
-        (&mut self.device).write(bytes.as_slice())?;
+        self.device.write(bytes.as_slice())?;
 
         Ok(())
     }

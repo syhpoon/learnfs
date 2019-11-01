@@ -22,6 +22,7 @@
  SOFTWARE.
 */
 
+mod block;
 mod file;
 
 use std::io;
@@ -29,6 +30,7 @@ use std::io;
 use failure::Error;
 
 pub use file::FileDevice;
+pub use block::BlockDevice;
 
 /// Defines a device abstraction.
 /// All the rest of the code works with this interface.

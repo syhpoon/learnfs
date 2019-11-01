@@ -36,6 +36,8 @@ pub struct FsInfo {
     pub num_data_bitmap_blocks: u32,
     // Number of inode blocks
     pub num_inode_blocks: u32,
+    // The offset of the first block containing inode in bytes
+    pub first_inode_block_offset: u64,
     // The offset of the first block containing data in bytes
     pub first_data_block_offset: u64,
 }

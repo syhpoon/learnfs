@@ -35,7 +35,7 @@ use super::types::BlockPtr;
 
 pub struct Directory {
     name2inode: HashMap<String, InodePtr>,
-    entries: Vec<(Option<DirEntry>, BlockPtr, usize)>,
+    entries: Vec<(Option<DirEntry>, BlockPtr)>,
 }
 
 impl Directory {
@@ -48,7 +48,6 @@ impl Directory {
         };
 
         // Load every assigned block and scan for dir entries
-        let mut i = 0;
         for bid in inode.get_blocks() {
             let bcell = fs.get_block(bid)?;
             let block = bcell.borrow();
@@ -61,16 +60,15 @@ impl Directory {
                 let entry = DirEntry::try_from(slice)?;
 
                 // inode == 0 indicates unused entry
-                if entry.inode != 0 {
-                    dir.name2inode.insert(entry.name_as_string(), entry.inode);
-                    dir.entries.push((Some(entry), bid, i));
+                if entry.inode == 0 {
+                    dir.entries.push((None, bid));
                 } else {
-                    dir.entries.push((None, bid, i));
+                    dir.name2inode.insert(entry.name_as_string(), entry.inode);
+                    dir.entries.push((Some(entry), bid));
                 }
 
                 start += DirEntry::SIZE;
                 end += DirEntry::SIZE;
-                i += 1;
             }
         }
 
@@ -83,19 +81,21 @@ impl Directory {
         let entry = DirEntry::new(inode, name.as_str())?;
         self.name2inode.insert(name, inode);
 
-        //TODO: Just add an entry here and write out in fs.flush
+        // Find the first empty entry slot
         match self.entries.iter().position(|e| e.0.is_none()) {
-            Some(i) => {
-                let (_, bid, idx) = self.entries[i];
+            Some(idx) => {
+                let bid = self.entries[idx].1;
                 let offset = idx * DirEntry::SIZE;
-                let bcell = fs.get_block(bid)?;
                 let bytes: Vec<u8> = bincode::serialize(&entry)?;
-
                 let range = offset..(offset + DirEntry::SIZE);
+                let bcell = fs.get_block(bid)?;
                 let mut block = bcell.borrow_mut();
+
+                // Replace serialized entry
                 block.data.splice(range, bytes);
                 block.set_dirty(true);
-                self.entries[i] = (Some(entry), bid, idx)
+
+                self.entries[idx] = (Some(entry), bid)
             }
             None => unimplemented!("TODO: allocate more blocks")
         };

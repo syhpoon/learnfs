@@ -26,6 +26,8 @@
 extern crate lazy_static;
 #[macro_use]
 extern crate serde_big_array;
+#[macro_use]
+extern crate nix;
 
 mod device;
 mod fs;
@@ -35,7 +37,7 @@ use clap::{App, AppSettings, Arg, SubCommand};
 use failure::{format_err, Error};
 use nix::sys::stat::{stat, SFlag};
 
-use crate::device::FileDevice;
+use crate::device::{BlockDevice, FileDevice};
 use crate::fs::Filesystem;
 
 enum DeviceType {
@@ -53,7 +55,7 @@ fn main() -> Result<(), Error> {
                 .setting(AppSettings::DisableVersion)
                 .arg(
                     Arg::with_name("device")
-                        .help("Block device to use")
+                        .help("File or block device to use")
                         .index(1)
                         .required(true),
                 )
@@ -95,9 +97,14 @@ fn main() -> Result<(), Error> {
                     }
 
                     let device = FileDevice::new(path, capacity)?;
-                    fs::Filesystem::create(device).expect("wut");
+                    Filesystem::create(device)
+                        .expect("failed to create a filesystem");
                 }
-                Ok(DeviceType::Block) => unimplemented!(),
+                Ok(DeviceType::Block) => {
+                    let device = BlockDevice::new(path)?;
+                    Filesystem::create(device)
+                        .expect("failed to create a filesystem");
+                }
                 Err(e) => {
                     return Err(e);
                 }
@@ -113,7 +120,12 @@ fn main() -> Result<(), Error> {
 
                     println!("{:#?}", fs.info())
                 }
-                Ok(DeviceType::Block) => unimplemented!(),
+                Ok(DeviceType::Block) => {
+                    let device = BlockDevice::open(path)?;
+                    let fs = Filesystem::load(device)?;
+
+                    println!("{:#?}", fs.info())
+                }
                 Err(e) => {
                     return Err(e);
                 }
