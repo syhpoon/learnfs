@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package learnfs;
+
+service LearnFs {
+    rpc Rmdir (RmdirRequest) returns (CallResult);
+}
+
+message RmdirRequest {
+    string pathname = 1;
+}
+
+message CallResult {
+    int32 code = 1;
+}

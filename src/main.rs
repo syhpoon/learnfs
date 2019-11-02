@@ -31,6 +31,7 @@ extern crate nix;
 
 mod device;
 mod fs;
+mod grpc;
 
 use clap::{crate_version, value_t};
 use clap::{App, AppSettings, Arg, SubCommand};
@@ -39,6 +40,7 @@ use nix::sys::stat::{stat, SFlag};
 
 use crate::device::{BlockDevice, FileDevice};
 use crate::fs::Filesystem;
+use crate::grpc::Server;
 
 enum DeviceType {
     File,
@@ -78,17 +80,53 @@ fn main() -> Result<(), Error> {
                         .index(1)
                         .required(true),
                 ),
+        )
+        .subcommand(
+            SubCommand::with_name("server")
+                .about("Start learnfs server")
+                .setting(AppSettings::DisableVersion)
+                .arg(
+                    Arg::with_name("listen")
+                        .help("Grpc listen address")
+                        .short("l")
+                        .takes_value(true)
+                        .default_value("0.0.0.0:4321"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("client")
+                .about("learnfs client")
+                .setting(AppSettings::DisableVersion)
+                .subcommand(
+                    App::new("rmdir")
+                        .about("Remove directory")
+                        .setting(AppSettings::DisableVersion)
+                        .arg(
+                            Arg::with_name("directory")
+                                .help("Directory to remove")
+                                .index(1)
+                                .required(true),
+                        )
+                        .arg(
+                            Arg::with_name("server")
+                                .help("Server address")
+                                .short("s")
+                                .takes_value(true)
+                                .default_value("http://127.0.0.1:4321"),
+                        ),
+                )
         );
 
     let help = extract_help(&app);
+    let matches = app.get_matches();
 
-    match app.get_matches().subcommand() {
-        ("create", Some(create_match)) => {
-            let path = create_match.value_of("device").unwrap();
+    match matches.subcommand() {
+        ("create", Some(create_m)) => {
+            let path = create_m.value_of("device").unwrap();
 
             match device_type(path) {
                 Ok(DeviceType::File) => {
-                    let capacity = value_t!(create_match, "capacity", u64).unwrap();
+                    let capacity = value_t!(create_m, "capacity", u64).unwrap();
 
                     if capacity == 0 {
                         return Err(format_err!(
@@ -110,8 +148,8 @@ fn main() -> Result<(), Error> {
                 }
             }
         }
-        ("info", Some(m)) => {
-            let path = m.value_of("device").unwrap();
+        ("info", Some(info_m)) => {
+            let path = info_m.value_of("device").unwrap();
 
             match device_type(path) {
                 Ok(DeviceType::File) => {
@@ -128,6 +166,37 @@ fn main() -> Result<(), Error> {
                 }
                 Err(e) => {
                     return Err(e);
+                }
+            }
+        }
+        ("server", Some(server_m)) => {
+            let listen = server_m.value_of("listen").unwrap();
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+
+            runtime.block_on(Server::run(listen))?
+        }
+        ("client", Some(client_m)) => {
+            match client_m.subcommand() {
+                ("rmdir", Some(m)) => {
+                    let dir = m.value_of("directory").unwrap().to_string();
+                    let server = m.value_of("server").unwrap().to_string();
+
+                    let runtime = tokio::runtime::Runtime::new()?;
+                    runtime.block_on(async {
+                        let mut client = grpc::Client::connect(server)
+                            .await.unwrap();
+
+                        let req = grpc::RmdirRequest {
+                            pathname: dir.to_string(),
+                        };
+
+                        let resp = client.rmdir(req).await.unwrap();
+
+                        println!("RESPONSE: {:?}", resp);
+                    })
+                }
+                _ => {
+                    eprintln!("{}", help);
                 }
             }
         }

@@ -22,14 +22,13 @@
  SOFTWARE.
 */
 
-use std::fs;
 use std::io;
+use std::os::unix::io::AsRawFd;
+use std::fs::{OpenOptions, File};
 
 use failure::Error;
-use std::os::unix::io::AsRawFd;
 
 use crate::device::Device;
-use std::fs::{OpenOptions, File};
 
 // Generate ioctl function
 const BLKGETSIZE64_CODE: u8 = 0x12; // Defined in linux/fs.h
@@ -38,7 +37,7 @@ ioctl_read!(ioctl_blkgetsize64, BLKGETSIZE64_CODE, BLKGETSIZE64_SEQ, u64);
 
 /// Implements Device abstraction on top of a block device
 pub struct BlockDevice {
-    file: fs::File,
+    file: File,
     capacity: u64,
 }
 
