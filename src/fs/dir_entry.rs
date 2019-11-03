@@ -26,6 +26,7 @@ use std::convert::TryFrom;
 
 use failure::{Error, format_err};
 use serde::{Deserialize, Serialize};
+use serde_big_array::big_array;
 
 use super::types::InodePtr;
 

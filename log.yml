@@ -1,0 +1,14 @@
+appenders:
+  stdout:
+    kind: console
+    encoder:
+      pattern: "{d(%Y-%m-%dT%H:%M:%S %Z)(utc)} {h([{l}])} at {M}:{L} {m}{n}"
+
+loggers:
+  learnfs:
+    level: debug
+
+root:
+  level: info
+  appenders:
+    - stdout

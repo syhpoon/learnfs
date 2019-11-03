@@ -3,13 +3,13 @@ syntax = "proto3";
 package learnfs;
 
 service LearnFs {
-    rpc Rmdir (RmdirRequest) returns (CallResult);
+    rpc Rmdir (RmdirRequest) returns (RpcResult);
 }
 
 message RmdirRequest {
     string pathname = 1;
 }
 
-message CallResult {
+message RpcResult {
     int32 code = 1;
 }

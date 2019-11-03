@@ -28,6 +28,7 @@ mod proto {
 
 pub use proto::{
     client::LearnFsClient as Client,
-    RmdirRequest
+    RmdirRequest,
+    RpcResult
 };
 

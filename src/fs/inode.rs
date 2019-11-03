@@ -23,7 +23,7 @@
 */
 
 use failure::{Error, format_err};
-use lazy_static;
+use lazy_static::lazy_static;
 use nix::sys::stat::{mode_t, SFlag, Mode};
 use serde::{Deserialize, Serialize};
 

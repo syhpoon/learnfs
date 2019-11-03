@@ -23,6 +23,7 @@
 */
 
 use failure::Error;
+use log;
 use tonic::transport as tr;
 use tonic::{Request, Response, Status};
 
@@ -32,10 +33,10 @@ mod proto {
 
 use proto::{
     server::{LearnFs, LearnFsServer},
-    RmdirRequest, CallResult,
+    RmdirRequest, RpcResult,
 };
 
-type GrpcResult = Result<Response<CallResult>, Status>;
+type GrpcResult = Result<Response<RpcResult>, Status>;
 
 pub struct Server {}
 
@@ -43,9 +44,9 @@ pub struct Server {}
 impl LearnFs for Server {
     async fn rmdir(
         &self, request: Request<RmdirRequest>) -> GrpcResult {
-        println!("Got a request: {:?}", request);
+        log::debug!("incoming request: {:?}", request);
 
-        let reply = CallResult {
+        let reply = RpcResult {
             code: 1,
         };
 
@@ -57,6 +58,8 @@ impl Server {
     pub async fn run(addr: &str) -> Result<(), Error> {
         let paddr = addr.parse()?;
         let server = Server{};
+
+        log::info!("starting grpc server at {}", addr);
 
         tr::Server::builder()
             .add_service(LearnFsServer::new(server))

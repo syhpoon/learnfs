@@ -27,7 +27,8 @@ mod file;
 
 use std::io;
 
-use failure::Error;
+use failure::{Error, format_err};
+use nix::sys::stat::{stat, SFlag};
 
 pub use file::FileDevice;
 pub use block::BlockDevice;
@@ -38,3 +39,26 @@ pub trait Device: io::Write + io::Read + io::Seek {
     /// Return device capacity in bytes
     fn capacity(&mut self) -> Result<u64, Error>;
 }
+
+pub enum DeviceType {
+    File,
+    Block,
+}
+
+pub fn device_type(path: &str) -> Result<DeviceType, Error> {
+    match stat(path) {
+        Ok(st) => {
+            match SFlag::from_bits(st.st_mode & SFlag::S_IFMT.bits()) {
+                // Block device
+                Some(SFlag::S_IFBLK) => Ok(DeviceType::Block),
+                // Regular file
+                Some(SFlag::S_IFREG) => Ok(DeviceType::File),
+                _ => Err(format_err!(
+                    "Only block devices and regular files are currently supported"
+                )),
+            }
+        }
+        Err(e) => Err(format_err!("Failed to read device stat: {}", e)),
+    }
+}
+

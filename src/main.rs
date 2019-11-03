@@ -23,10 +23,6 @@
 */
 
 #[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate serde_big_array;
-#[macro_use]
 extern crate nix;
 
 mod device;
@@ -36,21 +32,25 @@ mod grpc;
 use clap::{crate_version, value_t};
 use clap::{App, AppSettings, Arg, SubCommand};
 use failure::{format_err, Error};
-use nix::sys::stat::{stat, SFlag};
 
-use crate::device::{BlockDevice, FileDevice};
+use crate::{
+    device::{BlockDevice, FileDevice, DeviceType, device_type}
+};
 use crate::fs::Filesystem;
 use crate::grpc::Server;
-
-enum DeviceType {
-    File,
-    Block,
-}
 
 fn main() -> Result<(), Error> {
     let app = App::new("learnfs")
         .version(crate_version!())
         .about("LearnFS command line tool")
+        .arg(
+            Arg::with_name("log")
+                .help("Logging configuration file")
+                .long("log")
+                .takes_value(true)
+                .global(true)
+                .default_value(""),
+        )
         .subcommand(
             SubCommand::with_name("create")
                 .about("Create filesystem on a given device")
@@ -119,6 +119,8 @@ fn main() -> Result<(), Error> {
 
     let help = extract_help(&app);
     let matches = app.get_matches();
+
+    init_log(matches.value_of("log").unwrap())?;
 
     match matches.subcommand() {
         ("create", Some(create_m)) => {
@@ -215,19 +217,35 @@ fn extract_help(app: &App) -> String {
     return String::from_utf8(vec).unwrap();
 }
 
-fn device_type(path: &str) -> Result<DeviceType, Error> {
-    match stat(path) {
-        Ok(st) => {
-            match SFlag::from_bits(st.st_mode & SFlag::S_IFMT.bits()) {
-                // Block device
-                Some(SFlag::S_IFBLK) => Ok(DeviceType::Block),
-                // Regular file
-                Some(SFlag::S_IFREG) => Ok(DeviceType::File),
-                _ => Err(format_err!(
-                    "Only block devices and regular files are currently supported"
-                )),
-            }
-        }
-        Err(e) => Err(format_err!("Failed to read device stat: {}", e)),
+fn init_log(config_file: &str) -> Result<(), Error> {
+    use log4rs;
+
+    if config_file.len() == 0 {
+        // Default logging
+        use log::LevelFilter;
+        use log4rs::append::console::ConsoleAppender;
+        use log4rs::append::file::FileAppender;
+        use log4rs::encode::pattern::PatternEncoder;
+        use log4rs::config::{Appender, Config, Logger, Root};
+
+        let pattern = "{d(%Y-%m-%dT%H:%M:%S %Z)(utc)} {h([{l}])} at {M}:{L} {m}{n}";
+
+        let stdout = ConsoleAppender::builder()
+            .encoder(Box::new(PatternEncoder::new(pattern)))
+            .build();
+
+        let lfs_logger = Logger::builder().build("learnfs", LevelFilter::Debug);
+
+        let config = Config::builder()
+            .appender(Appender::builder().build("stdout", Box::new(stdout)))
+            .logger(lfs_logger)
+            .build(Root::builder().appender("stdout").build(LevelFilter::Info))
+            .unwrap();
+
+        log4rs::init_config(config)?;
+    } else {
+        log4rs::init_file(config_file, Default::default())?
     }
+
+    Ok(())
 }
