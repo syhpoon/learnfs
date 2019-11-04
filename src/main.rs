@@ -27,6 +27,7 @@ extern crate nix;
 
 mod device;
 mod fs;
+mod fuse;
 mod grpc;
 
 use clap::{crate_version, value_t};
@@ -38,6 +39,7 @@ use crate::{
 };
 use crate::fs::Filesystem;
 use crate::grpc::Server;
+use crate::fuse::FuseFs;
 
 fn main() -> Result<(), Error> {
     let app = App::new("learnfs")
@@ -95,7 +97,7 @@ fn main() -> Result<(), Error> {
         )
         .subcommand(
             SubCommand::with_name("client")
-                .about("learnfs client")
+                .about("Run grpc client commands")
                 .setting(AppSettings::DisableVersion)
                 .subcommand(
                     App::new("rmdir")
@@ -114,6 +116,23 @@ fn main() -> Result<(), Error> {
                                 .takes_value(true)
                                 .default_value("http://127.0.0.1:4321"),
                         ),
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("mount")
+                .about("Mount filesystem via FUSE")
+                .setting(AppSettings::DisableVersion)
+                .arg(
+                    Arg::with_name("server")
+                        .help("Server address")
+                        .index(1)
+                        .required(true),
+                )
+                .arg(
+                    Arg::with_name("mountpoint")
+                        .help("Local mountpoint")
+                        .index(2)
+                        .required(true),
                 )
         );
 
@@ -171,6 +190,21 @@ fn main() -> Result<(), Error> {
                 }
             }
         }
+        ("mount", Some(m)) => {
+            let mountpoint = m.value_of("mountpoint").unwrap();
+            let server = m.value_of("server").unwrap();
+
+            log::info!("Mounting remote server {} to local dir {}",
+                       server, mountpoint);
+
+            let runtime = tokio::runtime::Runtime::new()?;
+            runtime.block_on(async {
+                let mut client = grpc::Client::connect(server.to_string())
+                    .await.unwrap();
+
+                FuseFs::mount(mountpoint.to_string(), client).unwrap();
+            })
+        }
         ("server", Some(server_m)) => {
             let listen = server_m.value_of("listen").unwrap();
             let runtime = tokio::runtime::Runtime::new().unwrap();
@@ -218,13 +252,10 @@ fn extract_help(app: &App) -> String {
 }
 
 fn init_log(config_file: &str) -> Result<(), Error> {
-    use log4rs;
-
     if config_file.len() == 0 {
         // Default logging
         use log::LevelFilter;
         use log4rs::append::console::ConsoleAppender;
-        use log4rs::append::file::FileAppender;
         use log4rs::encode::pattern::PatternEncoder;
         use log4rs::config::{Appender, Config, Logger, Root};
 
