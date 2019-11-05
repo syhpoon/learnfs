@@ -30,6 +30,9 @@ mod fs;
 mod fuse;
 mod grpc;
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use clap::{crate_version, value_t};
 use clap::{App, AppSettings, Arg, SubCommand};
 use failure::{format_err, Error};
@@ -191,6 +194,9 @@ fn main() -> Result<(), Error> {
             }
         }
         ("mount", Some(m)) => {
+            use signal_hook as signal;
+            use signal_hook::iterator::Signals;
+
             let mountpoint = m.value_of("mountpoint").unwrap();
             let server = m.value_of("server").unwrap();
 
@@ -202,8 +208,16 @@ fn main() -> Result<(), Error> {
                 let mut client = grpc::Client::connect(server.to_string())
                     .await.unwrap();
 
-                FuseFs::mount(mountpoint.to_string(), client).unwrap();
-            })
+                let mf = FuseFs::mount(mountpoint.to_string(), client)?;
+
+                // Now wait for termination signal
+                let signals = Signals::new(
+                    &[signal::SIGINT, signal::SIGTERM])?;
+
+                signals.forever().next();
+                Ok::<(), Error>(())
+            })?;
+
         }
         ("server", Some(server_m)) => {
             let listen = server_m.value_of("listen").unwrap();
@@ -220,16 +234,18 @@ fn main() -> Result<(), Error> {
                     let runtime = tokio::runtime::Runtime::new()?;
                     runtime.block_on(async {
                         let mut client = grpc::Client::connect(server)
-                            .await.unwrap();
+                            .await?;
 
                         let req = grpc::RmdirRequest {
                             pathname: dir.to_string(),
                         };
 
-                        let resp = client.rmdir(req).await.unwrap();
+                        let resp = client.rmdir(req).await?;
 
                         println!("RESPONSE: {:?}", resp);
-                    })
+
+                        Ok::<(), Error>(())
+                    })?
                 }
                 _ => {
                     eprintln!("{}", help);
