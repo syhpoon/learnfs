@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package learnfs;
+option go_package = "learnfs/proto";
+
+import "google/protobuf/timestamp.proto";
+
+service LearnFS {
+    rpc GetAttr (GetAttrRequest) returns (GetAttrResponse);
+    rpc Lookup (LookupRequest) returns (LookupResponse);
+    rpc OpenDir (stream NextDirEntryRequest) returns (stream DirEntryResponse);
+}
+
+// Inode attributes
+message Attr {
+    // Inode number
+    uint32 ino = 1;
+    // Size in bytes
+    uint32 size = 2;
+    // Size in blocks
+    uint32 blocks = 3;
+    // Access time
+    google.protobuf.Timestamp atime = 4;
+    // Modification time
+    google.protobuf.Timestamp mtime = 5;
+    // Status change time
+    google.protobuf.Timestamp ctime = 6;
+    // Inode kind
+    oneof kind {
+        bool unknown = 20;
+        bool fifo = 21;
+        bool char = 22;
+        bool block = 23;
+        bool directory = 24;
+        bool file = 25;
+        bool link = 26;
+        bool socket = 27;
+    };
+    // File mode
+    uint32 mode = 8;
+    /// Number of hard links
+    uint32 nlink = 9;
+    /// User id
+    uint32 uid = 10;
+    /// Group id
+    uint32 gid = 11;
+}
+
+// RPC messages
+message GetAttrRequest {
+    uint32 inode = 1;
+}
+
+message GetAttrResponse {
+    uint32 errno = 1;
+    Attr attr = 2;
+}
+
+message LookupRequest {
+    uint32 inode = 1;
+    string name = 2;
+}
+
+message LookupResponse {
+    uint32 errno = 1;
+    Attr attr = 2;
+}
+
+message NextDirEntryRequest {
+    uint32 inode = 1;
+}
+
+message DirEntryResponse {
+    message DirEntry {
+        uint32 inode = 1;
+        string name = 2;
+        uint32 mode = 3;
+    }
+
+    uint32 errno = 1;
+    DirEntry entry = 2;
+}
