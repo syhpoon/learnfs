@@ -33,16 +33,25 @@ func Create(dev device.Device) error {
 		return fmt.Errorf("failed to write metadata: %w", err)
 	}
 
-	blockCache := NewBlockCache(dev, pool, sb)
-	inodeCache := NewInodeCache(dev, pool, sb)
+	inodeBitmapBuf := make(Buf, sb.InodeBitmapSize())
+	inodeBitmap := NewBitmap(sb.NumInodes, inodeBitmapBuf)
+	inodeBitmap.Set(0)
+
+	dataBitmapBuf := make(Buf, sb.DataBitmapSize())
+	dataBitmap := NewBitmap(sb.NumDataBlocks, dataBitmapBuf)
+	dataBitmap.Set(0)
+
+	inodeAllocator := NewInodeAllocatorSimple(inodeBitmap)
+	blockAllocator := NewBlockAllocatorSimple(dataBitmap, sb.BlockSize)
+	blockCache := NewBlockCache(dev, blockAllocator, pool, sb)
+	inodeCache := NewInodeCache(dev, inodeAllocator, pool, sb)
 	dirCache := NewDirCache(pool, inodeCache, blockCache, sb, dev)
 
-	// Create a root directory
 	fs := &Filesystem{
 		dev:            dev,
 		superblock:     sb,
-		inodeAllocator: NewInodeAllocatorSimple(sb.NumInodes),
-		blockAllocator: NewBlockAllocatorSimple(sb.NumDataBitmapBlocks, sb.BlockSize),
+		inodeAllocator: inodeAllocator,
+		blockAllocator: blockAllocator,
 		pool:           pool,
 		blockCache:     blockCache,
 		inodeCache:     inodeCache,
@@ -50,6 +59,7 @@ func Create(dev device.Device) error {
 		blockSize:      sb.BlockSize,
 	}
 
+	// Create a root directory
 	if err := fs.createRootDir(); err != nil {
 		return fmt.Errorf("failed to create root directory: %w", err)
 	}
@@ -96,39 +106,68 @@ func Load(dev device.Device) (*Filesystem, error) {
 		return nil, fmt.Errorf("failed to read bitmaps: %w", err)
 	}
 
-	inodeBitmap := NewBitmapFromBuf(inodeBitmapBuf)
-	dataBitmap := NewBitmapFromBuf(dataBitmapBuf)
+	inodeBitmap := NewBitmap(sb.NumInodes, inodeBitmapBuf)
+	dataBitmap := NewBitmap(sb.NumDataBlocks, dataBitmapBuf)
 	pool := NewBufPool(sb.BlockSize)
 
-	blockCache := NewBlockCache(dev, pool, sb)
-	inodeCache := NewInodeCache(dev, pool, sb)
+	inodeAllocator := NewInodeAllocatorSimple(inodeBitmap)
+	blockAllocator := NewBlockAllocatorSimple(dataBitmap, sb.BlockSize)
+	blockCache := NewBlockCache(dev, blockAllocator, pool, sb)
+	inodeCache := NewInodeCache(dev, inodeAllocator, pool, sb)
+	dirCache := NewDirCache(pool, inodeCache, blockCache, sb, dev)
 
 	return &Filesystem{
 		dev:            dev,
 		superblock:     sb,
-		inodeAllocator: NewInodeAllocatorSimpleFromBitmap(inodeBitmap),
-		blockAllocator: NewBlockAllocatorSimpleFromBitmap(dataBitmap, sb.BlockSize),
+		inodeAllocator: inodeAllocator,
+		blockAllocator: blockAllocator,
 		pool:           pool,
 		blockCache:     blockCache,
 		inodeCache:     inodeCache,
-		dirCache:       NewDirCache(pool, inodeCache, blockCache, sb, dev),
+		dirCache:       dirCache,
 		blockSize:      sb.BlockSize,
 	}, nil
 }
 
-func (fs *Filesystem) GetInode(ptr InodePtr) (*Inode, error) {
-	if !fs.inodeAllocator.IsAllocated(ptr) {
-		return nil, ErrorNotFound
+func (fs *Filesystem) CreateFile(
+	dirInodePtr InodePtr,
+	name string,
+	mode uint32,
+	umask uint32,
+	uid uint32,
+	gid uint32) (*Inode, error) {
+	// Get the dir by the inode ptr
+	dir, err := fs.dirCache.GetDir(dirInodePtr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get dir for inode %d: %w", dirInodePtr, err)
 	}
 
+	// Allocate a new inode
+	ino, err := fs.inodeAllocator.AllocateInode()
+	if err != nil {
+		return nil, fmt.Errorf("failed to allocate inode: %w", err)
+	}
+
+	ino.Mode = syscall.S_IFREG | mode
+	ino.Uid = uid
+	ino.Gid = gid
+	ino.Nlink = 1
+
+	if err := dir.AddEntry(name, ino.Ptr()); err != nil {
+		return nil, fmt.Errorf("failed to add directory entry: %w", err)
+	}
+
+	ino.SetDirty(true)
+	fs.inodeCache.AddInode(ino)
+
+	return ino, nil
+}
+
+func (fs *Filesystem) GetInode(ptr InodePtr) (*Inode, error) {
 	return fs.inodeCache.GetInode(ptr)
 }
 
 func (fs *Filesystem) GetDir(ptr InodePtr) (*Directory, error) {
-	if !fs.inodeAllocator.IsAllocated(ptr) {
-		return nil, ErrorNotFound
-	}
-
 	return fs.dirCache.GetDir(ptr)
 }
 
@@ -169,7 +208,7 @@ func (fs *Filesystem) createRootDir() error {
 		return fmt.Errorf("failed to allocate inode: %w", err)
 	}
 
-	ino.SetMode(syscall.S_IFDIR | 0755)
+	ino.Mode = syscall.S_IFDIR | 0777
 
 	block, err := fs.blockAllocator.AllocateBlock()
 	if err != nil {
@@ -240,10 +279,10 @@ func (fs *Filesystem) writeBitmaps() error {
 }
 
 func writeFsMetadata(pool *BufPool, sb *Superblock, dev device.Device) error {
-	inodeBitmap := NewBitmap(sb.InodeBitmapSize())
+	inodeBitmap := NewBitmap(sb.NumInodes, make([]byte, sb.InodeBitmapSize()))
 	inodeBitmap.Set(0)
 
-	dataBitmap := NewBitmap(sb.DataBitmapSize())
+	dataBitmap := NewBitmap(sb.NumDataBlocks, make([]byte, sb.DataBitmapSize()))
 	dataBitmap.Set(0)
 
 	bin, err := serialize(pool, sb, inodeBitmap.GetBuf(), dataBitmap.GetBuf())

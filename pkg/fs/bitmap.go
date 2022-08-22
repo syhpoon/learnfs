@@ -7,17 +7,10 @@ type Bitmap struct {
 	maxBit uint32
 }
 
-func NewBitmap(size uint32) *Bitmap {
-	return &Bitmap{
-		buf:    make([]byte, size),
-		maxBit: size * 8,
-	}
-}
-
-func NewBitmapFromBuf(buf []byte) *Bitmap {
+func NewBitmap(size uint32, buf []byte) *Bitmap {
 	return &Bitmap{
 		buf:    buf,
-		maxBit: uint32(len(buf)) * 8,
+		maxBit: size,
 	}
 }
 

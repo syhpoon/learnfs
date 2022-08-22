@@ -14,17 +14,20 @@ type InodeCache struct {
 	dev   device.Device
 	pool  *BufPool
 	sb    *Superblock
+	alloc InodeAllocator
 
 	sync.RWMutex
 }
 
-func NewInodeCache(dev device.Device, pool *BufPool, sb *Superblock) *InodeCache {
+func NewInodeCache(dev device.Device, alloc InodeAllocator,
+	pool *BufPool, sb *Superblock) *InodeCache {
 
 	return &InodeCache{
 		cache: map[InodePtr]*Inode{},
 		pool:  pool,
 		sb:    sb,
 		dev:   dev,
+		alloc: alloc,
 	}
 }
 
@@ -41,6 +44,10 @@ func (ic *InodeCache) GetInode(ptr InodePtr) (*Inode, error) {
 
 	if ok {
 		return ino, nil
+	}
+
+	if !ic.alloc.IsAllocated(ptr) {
+		return nil, ErrorNotFound
 	}
 
 	buf := ic.pool.GetRead()

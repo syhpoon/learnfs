@@ -14,18 +14,20 @@ type BlockCache struct {
 	dev   device.Device
 	pool  *BufPool
 	sb    *Superblock
+	alloc BlockAllocator
 
 	sync.RWMutex
 }
 
 func NewBlockCache(
-	dev device.Device, pool *BufPool, sb *Superblock) *BlockCache {
+	dev device.Device, alloc BlockAllocator, pool *BufPool, sb *Superblock) *BlockCache {
 
 	return &BlockCache{
 		cache: map[BlockPtr]*Block{},
 		pool:  pool,
 		sb:    sb,
 		dev:   dev,
+		alloc: alloc,
 	}
 }
 
@@ -42,6 +44,10 @@ func (bc *BlockCache) GetBlock(ptr BlockPtr) (*Block, error) {
 
 	if ok {
 		return blk, nil
+	}
+
+	if !bc.alloc.IsAllocated(ptr) {
+		return nil, ErrorNotFound
 	}
 
 	buf := bc.pool.GetRead()

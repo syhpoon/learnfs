@@ -34,7 +34,7 @@ type Server struct {
 	sync.RWMutex
 }
 
-var _ proto.LearnFSServer = &Server{}
+var _ proto.LearnFSServer = (*Server)(nil)
 
 func RunServer(ctx context.Context, params Params) error {
 	log.Info().
@@ -74,7 +74,7 @@ func RunServer(ctx context.Context, params Params) error {
 func (s *Server) GetAttr(
 	ctx context.Context, req *proto.GetAttrRequest) (*proto.GetAttrResponse, error) {
 
-	log.Debug().Interface("req", req).Msg("got GetAttr request")
+	log.Debug().Interface("req", req).Msg("GetAttr request")
 
 	inode, err := s.fs.GetInode(req.Inode)
 
@@ -91,10 +91,53 @@ func (s *Server) GetAttr(
 	return &proto.GetAttrResponse{Attr: s.inode2attr(inode)}, nil
 }
 
+func (s *Server) SetAttr(
+	ctx context.Context, req *proto.SetAttrRequest) (*proto.SetAttrResponse, error) {
+
+	log.Debug().Interface("req", req).Msg("SetAttr request")
+
+	inode, err := s.fs.GetInode(req.Inode)
+
+	if err != nil {
+		if errors.Is(err, fs.ErrorNotFound) {
+			return &proto.SetAttrResponse{Errno: uint32(syscall.ENOENT)}, nil
+		}
+
+		log.Error().Err(err).Uint32("ptr", req.Inode).Msg("failed to get inode")
+
+		return nil, status.Errorf(codes.Internal, "failed to get inode")
+	}
+
+	inode.Lock()
+	defer inode.Unlock()
+
+	if req.Atime != nil {
+		inode.Atime = req.Atime.AsTime().UnixMicro()
+	}
+
+	if req.Mtime != nil {
+		inode.Mtime = req.Mtime.AsTime().UnixMicro()
+	}
+
+	if req.UidSet {
+		inode.Uid = req.Uid
+	}
+
+	if req.GidSet {
+		inode.Gid = req.Gid
+	}
+
+	if req.ModeSet {
+		inode.Mode = req.Mode
+	}
+
+	return &proto.SetAttrResponse{Attr: s.inode2attr(inode)}, nil
+}
+
 func (s *Server) Lookup(
 	ctx context.Context, req *proto.LookupRequest) (*proto.LookupResponse, error) {
 
-	log.Debug().Interface("req", req).Msg("got Lookup request")
+	log.Debug().Interface("req", req).Msg("Lookup request")
 
 	inode, err := s.fs.Lookup(req.Inode, req.Name)
 	if err != nil {
@@ -114,7 +157,7 @@ func (s *Server) OpenDir(stream proto.LearnFS_OpenDirServer) error {
 	var entries []*fs.DirEntry
 	idx := 0
 
-	log.Debug().Msg("got OpenDir request")
+	log.Debug().Msg("OpenDir request")
 
 	for {
 		in, err := stream.Recv()
@@ -163,13 +206,41 @@ func (s *Server) OpenDir(stream proto.LearnFS_OpenDirServer) error {
 			Entry: &proto.DirEntryResponse_DirEntry{
 				Inode: entry.InodePtr,
 				Name:  entry.GetName(),
-				Mode:  uint32(inode.Mode),
+				Mode:  inode.Mode,
 			},
 		}
 		_ = stream.Send(resp)
 
 		idx++
 	}
+}
+
+func (s *Server) CreateFile(
+	ctx context.Context, req *proto.CreateFileRequest) (*proto.CreateFileResponse, error) {
+
+	log.Debug().Interface("req", req).Msg("CreateFile request")
+
+	inode, err := s.fs.CreateFile(
+		req.DirInode,
+		req.Name,
+		req.Mode,
+		req.Umask,
+		req.Uid,
+		req.Gid)
+	if errors.Is(err, fs.ErrorAlreadyExists) {
+		return &proto.CreateFileResponse{Errno: uint32(syscall.EEXIST)}, nil
+	}
+
+	if err != nil {
+		log.Error().Err(err).
+			Uint32("ptr", req.DirInode).
+			Str("name", req.Name).
+			Msg("failed to create file")
+
+		return nil, status.Errorf(codes.Internal, "internal error")
+	}
+
+	return &proto.CreateFileResponse{Attr: s.inode2attr(inode)}, nil
 }
 
 func (s *Server) inode2attr(inode *fs.Inode) *proto.Attr {

@@ -16,16 +16,7 @@ type InodeAllocatorSimple struct {
 	sync.RWMutex
 }
 
-func NewInodeAllocatorSimple(size uint32) *InodeAllocatorSimple {
-	firstInode := InodePtr(1)
-
-	return &InodeAllocatorSimple{
-		bitmap:        NewBitmap(size),
-		nextFreeInode: &firstInode,
-	}
-}
-
-func NewInodeAllocatorSimpleFromBitmap(bm *Bitmap) *InodeAllocatorSimple {
+func NewInodeAllocatorSimple(bm *Bitmap) *InodeAllocatorSimple {
 	return &InodeAllocatorSimple{
 		bitmap:        bm,
 		nextFreeInode: bm.NextClearBit(0),

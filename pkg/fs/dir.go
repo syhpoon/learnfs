@@ -95,6 +95,13 @@ func LoadDirectory(inode *Inode, cache *BlockCache,
 }
 
 func (dir *Directory) AddEntry(name string, inodePtr InodePtr) error {
+	dir.Lock()
+	defer dir.Unlock()
+
+	if _, ok := dir.name2inode[name]; ok {
+		return ErrorAlreadyExists
+	}
+
 	entry, err := NewDirEntry(inodePtr, name)
 	if err != nil {
 		return fmt.Errorf("failed to create new dir entry: %w", err)

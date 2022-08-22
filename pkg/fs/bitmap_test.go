@@ -10,7 +10,7 @@ import (
 )
 
 func TestBitmap1(t *testing.T) {
-	b := NewBitmap(1)
+	b := NewBitmap(7, make([]byte, 1))
 
 	cases := []tuple.T2[uint32, uint8]{
 		tuple.New2[uint32, uint8](0, 1),
@@ -38,7 +38,7 @@ func TestBitmap1(t *testing.T) {
 }
 
 func TestBitmap2(t *testing.T) {
-	b := NewBitmap(1)
+	b := NewBitmap(7, make([]byte, 1))
 
 	require.Equal(t, uint8(0), b.buf[0])
 
@@ -56,7 +56,7 @@ func TestBitmap2(t *testing.T) {
 }
 
 func TestBitmap3(t *testing.T) {
-	b := NewBitmap(4)
+	b := NewBitmap(512, make([]byte, 4))
 
 	b.Set(26)
 	require.True(t, b.IsSet(26))
@@ -68,7 +68,7 @@ func TestBitmap3(t *testing.T) {
 }
 
 func TestBitmapFindNext(t *testing.T) {
-	b := NewBitmap(1)
+	b := NewBitmap(7, make([]byte, 1))
 
 	require.Equal(t, *b.NextClearBit(0), uint32(0))
 

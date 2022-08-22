@@ -17,16 +17,7 @@ type BlockAllocatorSimple struct {
 	sync.RWMutex
 }
 
-func NewBlockAllocatorSimple(bitmapSize uint32, blockSize uint32) *BlockAllocatorSimple {
-	firstBlock := BlockPtr(1)
-	return &BlockAllocatorSimple{
-		bitmap:        NewBitmap(bitmapSize),
-		nextFreeBlock: &firstBlock,
-		blockSize:     blockSize,
-	}
-}
-
-func NewBlockAllocatorSimpleFromBitmap(bm *Bitmap, blockSize uint32) *BlockAllocatorSimple {
+func NewBlockAllocatorSimple(bm *Bitmap, blockSize uint32) *BlockAllocatorSimple {
 	return &BlockAllocatorSimple{
 		bitmap:        bm,
 		nextFreeBlock: bm.NextClearBit(0),

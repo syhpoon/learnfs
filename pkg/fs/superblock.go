@@ -60,6 +60,9 @@ type Superblock struct {
 	// Number of inode blocks
 	NumInodeBlocks uint32
 
+	// Number of data blocks
+	NumDataBlocks uint32
+
 	// The offset of the first block containing inode in bytes
 	FirstInodeBlockOffset uint64
 
@@ -115,6 +118,7 @@ func NewSuperblock(params SuperblockParams) *Superblock {
 		NumInodeBitmapBlocks:  numInodeBitmapBlocks,
 		NumDataBitmapBlocks:   numDataBitmapBlocks,
 		NumInodeBlocks:        numInodeBlocks,
+		NumDataBlocks:         numDataBlocks,
 		FirstInodeBlockOffset: firstInodeBlockOffset,
 		FirstDataBlockOffset:  firstDataBlockOffset,
 	}
@@ -153,6 +157,7 @@ func (sb *Superblock) EncodeTo(w io.Writer) error {
 		sb.NumInodeBitmapBlocks,
 		sb.NumDataBitmapBlocks,
 		sb.NumInodeBlocks,
+		sb.NumDataBlocks,
 		sb.FirstInodeBlockOffset,
 		sb.FirstDataBlockOffset,
 	}
@@ -169,6 +174,7 @@ func (sb *Superblock) DecodeFrom(r io.Reader) error {
 		&sb.NumInodeBitmapBlocks,
 		&sb.NumDataBitmapBlocks,
 		&sb.NumInodeBlocks,
+		&sb.NumDataBlocks,
 		&sb.FirstInodeBlockOffset,
 		&sb.FirstDataBlockOffset,
 	}

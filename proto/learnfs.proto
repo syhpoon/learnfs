@@ -6,7 +6,9 @@ option go_package = "learnfs/proto";
 import "google/protobuf/timestamp.proto";
 
 service LearnFS {
+    rpc CreateFile (CreateFileRequest) returns (CreateFileResponse);
     rpc GetAttr (GetAttrRequest) returns (GetAttrResponse);
+    rpc SetAttr (SetAttrRequest) returns (SetAttrResponse);
     rpc Lookup (LookupRequest) returns (LookupResponse);
     rpc OpenDir (stream NextDirEntryRequest) returns (stream DirEntryResponse);
 }
@@ -56,6 +58,34 @@ message GetAttrResponse {
     Attr attr = 2;
 }
 
+message SetAttrRequest {
+    // Inode number
+    uint32 inode = 1;
+
+    // Access time
+    google.protobuf.Timestamp atime = 2;
+
+    // Modification time
+    google.protobuf.Timestamp mtime = 3;
+
+    // File mode
+    uint32 mode = 5;
+    bool mode_set = 6;
+
+    /// User id
+    uint32 uid = 7;
+    bool uid_set = 8;
+
+    /// Group id
+    uint32 gid = 9;
+    bool gid_set = 10;
+}
+
+message SetAttrResponse {
+    uint32 errno = 1;
+    Attr attr = 2;
+}
+
 message LookupRequest {
     uint32 inode = 1;
     string name = 2;
@@ -79,4 +109,19 @@ message DirEntryResponse {
 
     uint32 errno = 1;
     DirEntry entry = 2;
+}
+
+message CreateFileRequest {
+    uint32 dir_inode = 1;
+    string name = 2;
+    uint32 flags = 3;
+    uint32 mode = 4;
+    uint32 umask = 5;
+    uint32 uid = 6;
+    uint32 gid = 7;
+}
+
+message CreateFileResponse {
+    uint32 errno = 1;
+    Attr attr = 2;
 }

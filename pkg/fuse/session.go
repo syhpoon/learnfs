@@ -17,6 +17,7 @@ import (
 	"bazil.org/fuse"
 	"bazil.org/fuse/fuseutil"
 	"github.com/rs/zerolog/log"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type Session struct {
@@ -67,6 +68,12 @@ func (ses *Session) Start(ctx context.Context) {
 		}
 
 		switch r := req.(type) {
+		case *fuse.CreateRequest:
+			ses.create(ctx, r)
+		case *fuse.FlushRequest:
+			ses.flush(ctx, r)
+		case *fuse.ForgetRequest:
+			ses.forget(ctx, r)
 		case *fuse.GetattrRequest:
 			ses.getAttr(ctx, r)
 		case *fuse.GetxattrRequest:
@@ -79,6 +86,8 @@ func (ses *Session) Start(ctx context.Context) {
 			ses.read(ctx, r)
 		case *fuse.ReleaseRequest:
 			ses.release(ctx, r)
+		case *fuse.SetattrRequest:
+			ses.setAttr(ctx, r)
 		default:
 			fmt.Printf(">>> GOT REQ: %v (%T)\n", req, req)
 			req.RespondError(fmt.Errorf("WAT"))
@@ -92,7 +101,7 @@ func (ses *Session) Stop() {
 }
 
 func (ses *Session) getAttr(ctx context.Context, req *fuse.GetattrRequest) {
-	log.Debug().Interface("req", req).Msg("got getAttr request")
+	log.Debug().Interface("req", req).Msg("getAttr")
 
 	inode := req.Header.Node
 
@@ -114,11 +123,12 @@ func (ses *Session) getAttr(ctx context.Context, req *fuse.GetattrRequest) {
 }
 
 func (ses *Session) getxAttr(ctx context.Context, req *fuse.GetxattrRequest) {
+	log.Debug().Interface("req", req).Msg("getxAttr")
 	req.Respond(&fuse.GetxattrResponse{})
 }
 
 func (ses *Session) lookup(ctx context.Context, req *fuse.LookupRequest) {
-	log.Debug().Interface("req", req).Msg("got lookup request")
+	log.Debug().Interface("req", req).Msg("lookup")
 
 	inode := req.Header.Node
 
@@ -140,11 +150,14 @@ func (ses *Session) lookup(ctx context.Context, req *fuse.LookupRequest) {
 		return
 	}
 
-	req.Respond(&fuse.LookupResponse{Attr: ses.attr(uint64(inode), resp.Attr)})
+	req.Respond(&fuse.LookupResponse{
+		Node: inode,
+		Attr: ses.attr(uint64(inode), resp.Attr),
+	})
 }
 
 func (ses *Session) open(ctx context.Context, req *fuse.OpenRequest) {
-	log.Debug().Interface("req", req).Msg("got open request")
+	log.Debug().Interface("req", req).Msg("open")
 
 	inode := req.Header.Node
 
@@ -174,7 +187,7 @@ func (ses *Session) open(ctx context.Context, req *fuse.OpenRequest) {
 }
 
 func (ses *Session) read(ctx context.Context, req *fuse.ReadRequest) {
-	log.Debug().Interface("req", req).Msg("got read request")
+	log.Debug().Interface("req", req).Msg("read")
 
 	handle := uint64(req.Handle)
 
@@ -193,6 +206,9 @@ func (ses *Session) read(ctx context.Context, req *fuse.ReadRequest) {
 			stub := &proto.NextDirEntryRequest{}
 			for {
 				if err := h.stream.Send(stub); err != nil {
+					if err == io.EOF {
+						break
+					}
 					ll.Err(err).Msg("failed to request the next dir entry")
 					req.RespondError(err)
 					return
@@ -231,7 +247,7 @@ func (ses *Session) read(ctx context.Context, req *fuse.ReadRequest) {
 }
 
 func (ses *Session) release(ctx context.Context, req *fuse.ReleaseRequest) {
-	log.Debug().Interface("req", req).Msg("got release request")
+	log.Debug().Interface("req", req).Msg("release")
 
 	handle := uint64(req.Handle)
 
@@ -247,6 +263,105 @@ func (ses *Session) release(ctx context.Context, req *fuse.ReleaseRequest) {
 	}
 }
 
+func (ses *Session) create(ctx context.Context, req *fuse.CreateRequest) {
+	log.Debug().Interface("req", req).Msg("create")
+
+	dirInode := req.Header.Node
+
+	resp, err := ses.cl.CreateFile(ctx, &proto.CreateFileRequest{
+		DirInode: uint32(dirInode),
+		Name:     req.Name,
+		Flags:    uint32(req.Flags),
+		Mode:     ses.fromGoFileMode(req.Mode),
+		Umask:    uint32(req.Umask),
+		Uid:      req.Uid,
+		Gid:      req.Gid,
+	})
+
+	if err != nil {
+		log.Error().Err(err).Msg("failed to create file")
+		req.RespondError(err)
+		return
+	}
+
+	fileInode := fuse.NodeID(resp.Attr.Ino)
+
+	lookup := fuse.LookupResponse{
+		Node:       fileInode,
+		Attr:       ses.attr(uint64(fileInode), resp.Attr),
+		EntryValid: 1 * time.Minute,
+	}
+
+	open := fuse.OpenResponse{
+		Handle: fuse.HandleID(2),
+		Flags:  fuse.OpenKeepCache,
+	}
+
+	req.Respond(&fuse.CreateResponse{
+		LookupResponse: lookup,
+		OpenResponse:   open,
+	})
+}
+
+func (ses *Session) forget(ctx context.Context, req *fuse.ForgetRequest) {
+	log.Debug().Interface("req", req).Msg("forget")
+	req.Respond()
+}
+
+func (ses *Session) flush(ctx context.Context, req *fuse.FlushRequest) {
+	log.Debug().Interface("req", req).Msg("flush")
+	req.Respond()
+}
+
+func (ses *Session) setAttr(ctx context.Context, req *fuse.SetattrRequest) {
+	log.Debug().Interface("req", req).Msg("setAttr")
+
+	inode := req.Header.Node
+
+	r := &proto.SetAttrRequest{
+		Inode: uint32(inode),
+	}
+
+	if req.Valid.Atime() {
+		r.Atime = timestamppb.New(req.Atime)
+	}
+
+	if req.Valid.AtimeNow() {
+		r.Atime = timestamppb.New(time.Now())
+	}
+
+	if req.Valid.Mtime() {
+		r.Atime = timestamppb.New(req.Atime)
+	}
+
+	if req.Valid.MtimeNow() {
+		r.Mtime = timestamppb.New(time.Now())
+	}
+
+	if req.Valid.Uid() {
+		r.Uid = req.Uid
+		r.UidSet = true
+	}
+
+	if req.Valid.Gid() {
+		r.Gid = req.Gid
+		r.GidSet = true
+	}
+
+	if req.Valid.Mode() {
+		r.Mode = ses.fromGoFileMode(req.Mode)
+	}
+
+	resp, err := ses.cl.SetAttr(ctx, r)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to set attributes")
+		req.RespondError(err)
+		return
+	}
+
+	req.Respond(&fuse.SetattrResponse{Attr: ses.attr(uint64(inode), resp.Attr)})
+}
+
 func (ses *Session) attr(inode uint64, a *proto.Attr) fuse.Attr {
 	return fuse.Attr{
 		Valid:     1 * time.Minute,
@@ -256,7 +371,7 @@ func (ses *Session) attr(inode uint64, a *proto.Attr) fuse.Attr {
 		Atime:     a.Atime.AsTime(),
 		Mtime:     a.Mtime.AsTime(),
 		Ctime:     a.Ctime.AsTime(),
-		Mode:      ses.toFileMode(a.Mode),
+		Mode:      ses.toGoFileMode(a.Mode),
 		Nlink:     a.Nlink,
 		Uid:       a.Uid,
 		Gid:       a.Gid,
@@ -285,7 +400,7 @@ func (ses *Session) entryType(mode uint32) fuse.DirentType {
 	}
 }
 
-func (ses *Session) toFileMode(raw uint32) os.FileMode {
+func (ses *Session) toGoFileMode(raw uint32) os.FileMode {
 	// Permissions
 	mode := os.FileMode(raw & 0777)
 
@@ -315,6 +430,39 @@ func (ses *Session) toFileMode(raw uint32) os.FileMode {
 	}
 	if raw&syscall.S_ISVTX != 0 {
 		mode |= os.ModeSticky
+	}
+
+	return mode
+}
+
+func (ses *Session) fromGoFileMode(fileMode os.FileMode) uint32 {
+	mode := uint32(fileMode.Perm())
+
+	switch fileMode.Type() {
+	case 0:
+		mode |= syscall.S_IFREG
+	case os.ModeDir:
+		mode |= syscall.S_IFDIR
+	case os.ModeDevice:
+		if fileMode&os.ModeCharDevice > 0 {
+			mode |= syscall.S_IFCHR
+		} else {
+			mode |= syscall.S_IFBLK
+		}
+	case os.ModeNamedPipe:
+		mode |= syscall.S_IFIFO
+	case os.ModeSymlink:
+		mode |= syscall.S_IFLNK
+	case os.ModeSocket:
+		mode |= syscall.S_IFSOCK
+	}
+
+	if fileMode&os.ModeSetuid != 0 {
+		mode |= syscall.S_ISUID
+	}
+
+	if fileMode&os.ModeSetgid != 0 {
+		mode |= syscall.S_ISGID
 	}
 
 	return mode

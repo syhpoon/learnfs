@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -51,6 +52,8 @@ type Inode struct {
 
 	// Dirty flag indicates if inode has been modified
 	dirty int32
+
+	sync.RWMutex
 }
 
 func NewInodeFromBuf(ptr InodePtr, buf Buf) (*Inode, error) {
@@ -86,14 +89,6 @@ func NewInode(ptr InodePtr) *Inode {
 
 func (ino *Inode) Ptr() InodePtr {
 	return ino.ptr
-}
-
-func (ino *Inode) SetMode(mode uint32) {
-	ino.Mode = mode
-}
-
-func (ino *Inode) GetMode() uint32 {
-	return ino.Mode
 }
 
 func (ino *Inode) GetBlockPtrs() []BlockPtr {
