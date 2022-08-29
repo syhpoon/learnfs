@@ -1,7 +1,9 @@
 package fs
 
 import (
+	"context"
 	"fmt"
+	"sync"
 	"syscall"
 
 	"learnfs/pkg/device"
@@ -16,6 +18,7 @@ type Filesystem struct {
 	inodeCache     *InodeCache
 	dirCache       *DirCache
 	pool           *BufPool
+	flusher        *flusher
 	blockSize      uint32
 }
 
@@ -46,6 +49,16 @@ func Create(dev device.Device) error {
 	blockCache := NewBlockCache(dev, blockAllocator, pool, sb)
 	inodeCache := NewInodeCache(dev, inodeAllocator, pool, sb)
 	dirCache := NewDirCache(pool, inodeCache, blockCache, sb, dev)
+	flusherObj := &flusher{
+		pool:           pool,
+		blockCache:     blockCache,
+		inodeCache:     inodeCache,
+		dirCache:       dirCache,
+		sb:             sb,
+		inodeAllocator: inodeAllocator,
+		blockAllocator: blockAllocator,
+		dev:            dev,
+	}
 
 	fs := &Filesystem{
 		dev:            dev,
@@ -57,6 +70,7 @@ func Create(dev device.Device) error {
 		inodeCache:     inodeCache,
 		dirCache:       dirCache,
 		blockSize:      sb.BlockSize,
+		flusher:        flusherObj,
 	}
 
 	// Create a root directory
@@ -115,6 +129,16 @@ func Load(dev device.Device) (*Filesystem, error) {
 	blockCache := NewBlockCache(dev, blockAllocator, pool, sb)
 	inodeCache := NewInodeCache(dev, inodeAllocator, pool, sb)
 	dirCache := NewDirCache(pool, inodeCache, blockCache, sb, dev)
+	flusherObj := &flusher{
+		pool:           pool,
+		blockCache:     blockCache,
+		inodeCache:     inodeCache,
+		dirCache:       dirCache,
+		sb:             sb,
+		inodeAllocator: inodeAllocator,
+		blockAllocator: blockAllocator,
+		dev:            dev,
+	}
 
 	return &Filesystem{
 		dev:            dev,
@@ -125,8 +149,13 @@ func Load(dev device.Device) (*Filesystem, error) {
 		blockCache:     blockCache,
 		inodeCache:     inodeCache,
 		dirCache:       dirCache,
+		flusher:        flusherObj,
 		blockSize:      sb.BlockSize,
 	}, nil
+}
+
+func (fs *Filesystem) RunFlusher(ctx context.Context, wg *sync.WaitGroup) {
+	fs.flusher.run(ctx, wg)
 }
 
 func (fs *Filesystem) CreateFile(
@@ -169,6 +198,10 @@ func (fs *Filesystem) GetInode(ptr InodePtr) (*Inode, error) {
 
 func (fs *Filesystem) GetDir(ptr InodePtr) (*Directory, error) {
 	return fs.dirCache.GetDir(ptr)
+}
+
+func (fs *Filesystem) Flush(ptr InodePtr) error {
+	return fs.flusher.flushInode(ptr)
 }
 
 func (fs *Filesystem) Lookup(ptr InodePtr, name string) (*Inode, error) {
@@ -238,42 +271,8 @@ func (fs *Filesystem) createRootDir() error {
 
 	fs.dirCache.AddDir(dir)
 
-	if err := fs.blockCache.flush(); err != nil {
-		return fmt.Errorf("failed to flush block cache: %w", err)
-	}
-
-	if err := fs.inodeCache.flush(); err != nil {
-		return fmt.Errorf("failed to flush inode cache: %w", err)
-	}
-
-	if err := fs.dirCache.flush(); err != nil {
-		return fmt.Errorf("failed to flush dir cache: %w", err)
-	}
-
-	if err := fs.writeBitmaps(); err != nil {
-		return fmt.Errorf("failed to write bitmaps: %w", err)
-	}
-
-	return nil
-}
-
-func (fs *Filesystem) writeBitmaps() error {
-	ib := fs.inodeAllocator.GetBitmap()
-	bb := fs.blockAllocator.GetBitmap()
-
-	bin, err := serialize(fs.pool, ib.GetBuf(), bb.GetBuf())
-	if err != nil {
-		return fmt.Errorf("failed to serialize bitmaps: %w", err)
-	}
-
-	op := &device.Op{
-		Buf:    bin,
-		Offset: uint64(SUPERBLOCK_SIZE),
-	}
-
-	if err := fs.dev.Write(op); err != nil {
-		return fmt.Errorf("failed to write bitmaps: %w", err)
-	}
+	fs.flusher.flushAll()
+	fs.flusher.flushBitmaps()
 
 	return nil
 }

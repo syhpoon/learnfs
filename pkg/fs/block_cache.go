@@ -37,6 +37,14 @@ func (bc *BlockCache) AddBlock(block *Block) {
 	bc.RUnlock()
 }
 
+func (bc *BlockCache) GetBlockNoFetch(ptr BlockPtr) *Block {
+	bc.RLock()
+	block := bc.cache[ptr]
+	bc.RUnlock()
+
+	return block
+}
+
 func (bc *BlockCache) GetBlock(ptr BlockPtr) (*Block, error) {
 	bc.RLock()
 	blk, ok := bc.cache[ptr]

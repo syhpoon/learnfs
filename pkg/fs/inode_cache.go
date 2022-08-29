@@ -37,6 +37,14 @@ func (ic *InodeCache) AddInode(inode *Inode) {
 	ic.Unlock()
 }
 
+func (ic *InodeCache) GetCachedInode(ptr InodePtr) *Inode {
+	ic.RLock()
+	ino := ic.cache[ptr]
+	ic.RUnlock()
+
+	return ino
+}
+
 func (ic *InodeCache) GetInode(ptr InodePtr) (*Inode, error) {
 	ic.RLock()
 	ino, ok := ic.cache[ptr]

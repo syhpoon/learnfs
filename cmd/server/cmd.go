@@ -4,6 +4,10 @@ package server
 
 import (
 	"context"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 
 	"learnfs/pkg/device"
 	"learnfs/pkg/fs"
@@ -35,15 +39,57 @@ var Cmd = &cobra.Command{
 		if err != nil {
 			log.Fatal().Err(err).Msg("failed to load filesystem")
 		}
-		defer fsObj.Shutdown()
 
-		if err := server.RunServer(ctx, server.Params{
-			Listen: flagListen,
-			Fs:     fsObj,
-		}); err != nil {
-			log.Fatal().Err(err).Msg("failed to run learnfs server")
-		}
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		go fsObj.RunFlusher(ctx, wg)
+
+		go func() {
+			if err := server.RunServer(ctx, server.Params{
+				Listen: flagListen,
+				Fs:     fsObj,
+			}); err != nil {
+				log.Fatal().Err(err).Msg("failed to run learnfs server")
+			}
+		}()
+
+		wait(ctx, cancel, wg)
+		_ = fsObj.Shutdown()
 	},
+}
+
+func wait(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup) {
+	c := make(chan os.Signal, 1)
+
+	signal.Notify(c,
+		os.Interrupt,
+		syscall.SIGTERM,
+		syscall.SIGABRT,
+		syscall.SIGPIPE,
+		syscall.SIGBUS,
+		syscall.SIGUSR1,
+		syscall.SIGUSR2,
+		syscall.SIGQUIT)
+
+LOOP:
+	for {
+		select {
+		case <-ctx.Done():
+			break
+
+		case sig := <-c:
+			switch sig {
+			case os.Interrupt, syscall.SIGTERM, syscall.SIGABRT,
+				syscall.SIGPIPE, syscall.SIGBUS, syscall.SIGUSR1, syscall.SIGUSR2,
+				syscall.SIGQUIT:
+
+				break LOOP
+			}
+		}
+	}
+
+	cancel()
+	wg.Wait()
 }
 
 func init() {

@@ -119,7 +119,7 @@ func (ses *Session) getAttr(ctx context.Context, req *fuse.GetattrRequest) {
 		return
 	}
 
-	req.Respond(&fuse.GetattrResponse{Attr: ses.attr(uint64(inode), resp.Attr)})
+	req.Respond(&fuse.GetattrResponse{Attr: ses.attr(resp.Attr)})
 }
 
 func (ses *Session) getxAttr(ctx context.Context, req *fuse.GetxattrRequest) {
@@ -151,8 +151,8 @@ func (ses *Session) lookup(ctx context.Context, req *fuse.LookupRequest) {
 	}
 
 	req.Respond(&fuse.LookupResponse{
-		Node: inode,
-		Attr: ses.attr(uint64(inode), resp.Attr),
+		Node: fuse.NodeID(resp.Attr.Ino),
+		Attr: ses.attr(resp.Attr),
 	})
 }
 
@@ -183,6 +183,7 @@ func (ses *Session) open(ctx context.Context, req *fuse.OpenRequest) {
 
 	req.Respond(&fuse.OpenResponse{
 		Handle: fuse.HandleID(handle),
+		Flags:  fuse.OpenKeepCache,
 	})
 }
 
@@ -284,16 +285,15 @@ func (ses *Session) create(ctx context.Context, req *fuse.CreateRequest) {
 		return
 	}
 
-	fileInode := fuse.NodeID(resp.Attr.Ino)
-
 	lookup := fuse.LookupResponse{
-		Node:       fileInode,
-		Attr:       ses.attr(uint64(fileInode), resp.Attr),
+		Node:       fuse.NodeID(resp.Attr.Ino),
+		Attr:       ses.attr(resp.Attr),
 		EntryValid: 1 * time.Minute,
 	}
 
 	open := fuse.OpenResponse{
-		Handle: fuse.HandleID(2),
+		// TODO
+		Handle: fuse.HandleID(10),
 		Flags:  fuse.OpenKeepCache,
 	}
 
@@ -310,6 +310,14 @@ func (ses *Session) forget(ctx context.Context, req *fuse.ForgetRequest) {
 
 func (ses *Session) flush(ctx context.Context, req *fuse.FlushRequest) {
 	log.Debug().Interface("req", req).Msg("flush")
+
+	_, err := ses.cl.Flush(ctx, &proto.FlushRequest{Inode: uint32(req.Handle)})
+	if err != nil {
+		log.Error().Err(err).Uint64("inode", uint64(req.Handle)).Msg("failed to flush file")
+		req.RespondError(err)
+		return
+	}
+
 	req.Respond()
 }
 
@@ -331,7 +339,7 @@ func (ses *Session) setAttr(ctx context.Context, req *fuse.SetattrRequest) {
 	}
 
 	if req.Valid.Mtime() {
-		r.Atime = timestamppb.New(req.Atime)
+		r.Mtime = timestamppb.New(req.Mtime)
 	}
 
 	if req.Valid.MtimeNow() {
@@ -350,6 +358,7 @@ func (ses *Session) setAttr(ctx context.Context, req *fuse.SetattrRequest) {
 
 	if req.Valid.Mode() {
 		r.Mode = ses.fromGoFileMode(req.Mode)
+		r.ModeSet = true
 	}
 
 	resp, err := ses.cl.SetAttr(ctx, r)
@@ -359,13 +368,13 @@ func (ses *Session) setAttr(ctx context.Context, req *fuse.SetattrRequest) {
 		return
 	}
 
-	req.Respond(&fuse.SetattrResponse{Attr: ses.attr(uint64(inode), resp.Attr)})
+	req.Respond(&fuse.SetattrResponse{Attr: ses.attr(resp.Attr)})
 }
 
-func (ses *Session) attr(inode uint64, a *proto.Attr) fuse.Attr {
+func (ses *Session) attr(a *proto.Attr) fuse.Attr {
 	return fuse.Attr{
 		Valid:     1 * time.Minute,
-		Inode:     inode,
+		Inode:     uint64(a.Ino),
 		Size:      uint64(a.Size),
 		Blocks:    uint64(a.Blocks),
 		Atime:     a.Atime.AsTime(),

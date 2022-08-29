@@ -7,6 +7,7 @@ import "google/protobuf/timestamp.proto";
 
 service LearnFS {
     rpc CreateFile (CreateFileRequest) returns (CreateFileResponse);
+    rpc Flush (FlushRequest) returns (FlushResponse);
     rpc GetAttr (GetAttrRequest) returns (GetAttrResponse);
     rpc SetAttr (SetAttrRequest) returns (SetAttrResponse);
     rpc Lookup (LookupRequest) returns (LookupResponse);
@@ -27,25 +28,14 @@ message Attr {
     google.protobuf.Timestamp mtime = 5;
     // Status change time
     google.protobuf.Timestamp ctime = 6;
-    // Inode kind
-    oneof kind {
-        bool unknown = 20;
-        bool fifo = 21;
-        bool char = 22;
-        bool block = 23;
-        bool directory = 24;
-        bool file = 25;
-        bool link = 26;
-        bool socket = 27;
-    };
     // File mode
-    uint32 mode = 8;
+    uint32 mode = 7;
     /// Number of hard links
-    uint32 nlink = 9;
+    uint32 nlink = 8;
     /// User id
-    uint32 uid = 10;
+    uint32 uid = 9;
     /// Group id
-    uint32 gid = 11;
+    uint32 gid = 10;
 }
 
 // RPC messages
@@ -124,4 +114,12 @@ message CreateFileRequest {
 message CreateFileResponse {
     uint32 errno = 1;
     Attr attr = 2;
+}
+
+message FlushRequest {
+    uint32 inode = 1;
+}
+
+message FlushResponse {
+    uint32 errno = 1;
 }

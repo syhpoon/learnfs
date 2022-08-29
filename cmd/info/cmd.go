@@ -28,11 +28,12 @@ var Cmd = &cobra.Command{
 		if err != nil {
 			log.Fatalf("failed to load filesystem: %v", err)
 		}
-		defer fsObj.Shutdown()
 
 		sb := fsObj.Superblock()
 
 		b, _ := json.MarshalIndent(sb, "", "  ")
 		fmt.Printf("%+v\n", string(b))
+
+		_ = fsObj.Shutdown()
 	},
 }

@@ -23,6 +23,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type LearnFSClient interface {
 	CreateFile(ctx context.Context, in *CreateFileRequest, opts ...grpc.CallOption) (*CreateFileResponse, error)
+	Flush(ctx context.Context, in *FlushRequest, opts ...grpc.CallOption) (*FlushResponse, error)
 	GetAttr(ctx context.Context, in *GetAttrRequest, opts ...grpc.CallOption) (*GetAttrResponse, error)
 	SetAttr(ctx context.Context, in *SetAttrRequest, opts ...grpc.CallOption) (*SetAttrResponse, error)
 	Lookup(ctx context.Context, in *LookupRequest, opts ...grpc.CallOption) (*LookupResponse, error)
@@ -40,6 +41,15 @@ func NewLearnFSClient(cc grpc.ClientConnInterface) LearnFSClient {
 func (c *learnFSClient) CreateFile(ctx context.Context, in *CreateFileRequest, opts ...grpc.CallOption) (*CreateFileResponse, error) {
 	out := new(CreateFileResponse)
 	err := c.cc.Invoke(ctx, "/learnfs.LearnFS/CreateFile", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *learnFSClient) Flush(ctx context.Context, in *FlushRequest, opts ...grpc.CallOption) (*FlushResponse, error) {
+	out := new(FlushResponse)
+	err := c.cc.Invoke(ctx, "/learnfs.LearnFS/Flush", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -109,6 +119,7 @@ func (x *learnFSOpenDirClient) Recv() (*DirEntryResponse, error) {
 // for forward compatibility
 type LearnFSServer interface {
 	CreateFile(context.Context, *CreateFileRequest) (*CreateFileResponse, error)
+	Flush(context.Context, *FlushRequest) (*FlushResponse, error)
 	GetAttr(context.Context, *GetAttrRequest) (*GetAttrResponse, error)
 	SetAttr(context.Context, *SetAttrRequest) (*SetAttrResponse, error)
 	Lookup(context.Context, *LookupRequest) (*LookupResponse, error)
@@ -122,6 +133,9 @@ type UnimplementedLearnFSServer struct {
 
 func (UnimplementedLearnFSServer) CreateFile(context.Context, *CreateFileRequest) (*CreateFileResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateFile not implemented")
+}
+func (UnimplementedLearnFSServer) Flush(context.Context, *FlushRequest) (*FlushResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Flush not implemented")
 }
 func (UnimplementedLearnFSServer) GetAttr(context.Context, *GetAttrRequest) (*GetAttrResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetAttr not implemented")
@@ -162,6 +176,24 @@ func _LearnFS_CreateFile_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(LearnFSServer).CreateFile(ctx, req.(*CreateFileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _LearnFS_Flush_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FlushRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LearnFSServer).Flush(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/learnfs.LearnFS/Flush",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LearnFSServer).Flush(ctx, req.(*FlushRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -256,6 +288,10 @@ var LearnFS_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateFile",
 			Handler:    _LearnFS_CreateFile_Handler,
+		},
+		{
+			MethodName: "Flush",
+			Handler:    _LearnFS_Flush_Handler,
 		},
 		{
 			MethodName: "GetAttr",

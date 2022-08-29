@@ -137,7 +137,7 @@ func (s *Server) SetAttr(
 func (s *Server) Lookup(
 	ctx context.Context, req *proto.LookupRequest) (*proto.LookupResponse, error) {
 
-	log.Debug().Interface("req", req).Msg("Lookup request")
+	log.Debug().Interface("req", req).Msg("Lookup")
 
 	inode, err := s.fs.Lookup(req.Inode, req.Name)
 	if err != nil {
@@ -157,7 +157,7 @@ func (s *Server) OpenDir(stream proto.LearnFS_OpenDirServer) error {
 	var entries []*fs.DirEntry
 	idx := 0
 
-	log.Debug().Msg("OpenDir request")
+	log.Debug().Msg("OpenDir")
 
 	for {
 		in, err := stream.Recv()
@@ -194,6 +194,7 @@ func (s *Server) OpenDir(stream proto.LearnFS_OpenDirServer) error {
 		}
 
 		entry := entries[idx]
+
 		inode, err := s.fs.GetInode(entry.InodePtr)
 		if err != nil {
 			e := fmt.Errorf("failed to get entry inode %d: %w\n", entry.InodePtr, err)
@@ -243,6 +244,20 @@ func (s *Server) CreateFile(
 	return &proto.CreateFileResponse{Attr: s.inode2attr(inode)}, nil
 }
 
+func (s *Server) Flush(ctx context.Context, req *proto.FlushRequest) (*proto.FlushResponse, error) {
+	log.Debug().Interface("req", req).Msg("Flush")
+
+	if err := s.fs.Flush(req.Inode); err != nil {
+		log.Error().Err(err).
+			Uint32("ptr", req.Inode).
+			Msg("failed to flush file")
+
+		return nil, status.Errorf(codes.Internal, "internal error")
+	}
+
+	return &proto.FlushResponse{}, nil
+}
+
 func (s *Server) inode2attr(inode *fs.Inode) *proto.Attr {
 	attr := &proto.Attr{
 		Ino:    inode.Ptr(),
@@ -251,30 +266,10 @@ func (s *Server) inode2attr(inode *fs.Inode) *proto.Attr {
 		Atime:  timestamppb.New(time.UnixMicro(inode.Atime)),
 		Mtime:  timestamppb.New(time.UnixMicro(inode.Mtime)),
 		Ctime:  timestamppb.New(time.UnixMicro(inode.Ctime)),
-		Kind:   nil,
 		Mode:   inode.Mode,
 		Nlink:  inode.Nlink,
 		Uid:    inode.Uid,
 		Gid:    inode.Gid,
-	}
-
-	switch inode.Mode & syscall.S_IFMT {
-	case syscall.S_IFDIR:
-		attr.Kind = &proto.Attr_Directory{}
-	case syscall.S_IFREG:
-		attr.Kind = &proto.Attr_File{}
-	case syscall.S_IFLNK:
-		attr.Kind = &proto.Attr_Link{}
-	case syscall.S_IFSOCK:
-		attr.Kind = &proto.Attr_Socket{}
-	case syscall.S_IFIFO:
-		attr.Kind = &proto.Attr_Fifo{}
-	case syscall.S_IFBLK:
-		attr.Kind = &proto.Attr_Block{}
-	case syscall.S_IFCHR:
-		attr.Kind = &proto.Attr_Char{}
-	default:
-		attr.Kind = &proto.Attr_Unknown{}
 	}
 
 	return attr
