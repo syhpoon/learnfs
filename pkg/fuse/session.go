@@ -86,6 +86,8 @@ func (ses *Session) Start(ctx context.Context) {
 			ses.read(ctx, r)
 		case *fuse.ReleaseRequest:
 			ses.release(ctx, r)
+		case *fuse.RemoveRequest:
+			ses.remove(ctx, r)
 		case *fuse.SetattrRequest:
 			ses.setAttr(ctx, r)
 		default:
@@ -262,6 +264,34 @@ func (ses *Session) release(ctx context.Context, req *fuse.ReleaseRequest) {
 	} else {
 		// TODO
 	}
+}
+
+func (ses *Session) remove(ctx context.Context, req *fuse.RemoveRequest) {
+	log.Debug().Interface("req", req).Msg("remove")
+
+	inode := uint32(req.Node)
+
+	if req.Dir {
+		// TODO
+	} else {
+		resp, err := ses.cl.RemoveFile(ctx, &proto.RemoveFileRequest{
+			DirInode: inode,
+			Name:     req.Name,
+		})
+
+		if err != nil {
+			log.Error().Str("file", req.Name).Err(err).Msg("failed to remove file")
+			req.RespondError(err)
+			return
+		}
+
+		if resp.Errno != 0 {
+			req.RespondError(syscall.Errno(resp.Errno))
+			return
+		}
+	}
+
+	req.Respond()
 }
 
 func (ses *Session) create(ctx context.Context, req *fuse.CreateRequest) {

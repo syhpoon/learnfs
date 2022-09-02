@@ -192,6 +192,50 @@ func (fs *Filesystem) CreateFile(
 	return ino, nil
 }
 
+func (fs *Filesystem) RemoveFile(dirInodePtr InodePtr, name string) error {
+	dir, err := fs.dirCache.GetDir(dirInodePtr)
+	if err != nil {
+		return fmt.Errorf("failed to get dir for inode %d: %w", dirInodePtr, err)
+	}
+
+	inodePtr, err := dir.GetEntry(name)
+	if err != nil {
+		return fmt.Errorf("failed to get entry %s: %w", name, err)
+	}
+
+	inode, err := fs.GetInode(inodePtr)
+	if err != nil {
+		return fmt.Errorf("failed to get inode %d: %w", inodePtr, err)
+	}
+
+	inode.Lock()
+	defer inode.Unlock()
+
+	inode.Nlink--
+
+	// Need to remove the file
+	if inode.Nlink <= 0 {
+		// Deallocate all the data blocks
+		for _, blkPtr := range inode.GetBlockPtrs() {
+			if err := fs.blockAllocator.DeallocateBlock(blkPtr); err != nil {
+				return fmt.Errorf("failed to deallocate block %d: %w", blkPtr, err)
+			}
+		}
+
+		if err := dir.DeleteEntry(name); err != nil {
+			return fmt.Errorf("failed to delete directory entry: %w", err)
+		}
+
+		if err := fs.inodeAllocator.DeallocateInode(inode.ptr); err != nil {
+			return fmt.Errorf("failed to deallocate inode %d: %w", inode.ptr, err)
+		}
+
+		fs.inodeCache.DeleteInode(inodePtr)
+	}
+
+	return nil
+}
+
 func (fs *Filesystem) GetInode(ptr InodePtr) (*Inode, error) {
 	return fs.inodeCache.GetInode(ptr)
 }

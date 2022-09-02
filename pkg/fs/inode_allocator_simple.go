@@ -48,6 +48,15 @@ func (ia *InodeAllocatorSimple) AllocateInode() (*Inode, error) {
 	return inode, nil
 }
 
+func (ia *InodeAllocatorSimple) DeallocateInode(ptr InodePtr) error {
+	ia.Lock()
+	defer ia.Unlock()
+
+	ia.bitmap.Clear(ptr)
+
+	return nil
+}
+
 func (ia *InodeAllocatorSimple) IsAllocated(ptr InodePtr) bool {
 	ia.RLock()
 	set := ia.bitmap.IsSet(ptr)

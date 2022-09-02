@@ -119,7 +119,7 @@ func (bu *BlockUring) run(ops []*Op, cb func(*uring.SQEntry, int)) error {
 		cb(sqe, i)
 
 		if _, err := bu.ring.Submit(0); err != nil {
-			return fmt.Errorf("failed to submit write op: %w", err)
+			return fmt.Errorf("failed to submit ops: %w", err)
 		}
 	}
 

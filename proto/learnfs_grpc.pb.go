@@ -28,6 +28,7 @@ type LearnFSClient interface {
 	SetAttr(ctx context.Context, in *SetAttrRequest, opts ...grpc.CallOption) (*SetAttrResponse, error)
 	Lookup(ctx context.Context, in *LookupRequest, opts ...grpc.CallOption) (*LookupResponse, error)
 	OpenDir(ctx context.Context, opts ...grpc.CallOption) (LearnFS_OpenDirClient, error)
+	RemoveFile(ctx context.Context, in *RemoveFileRequest, opts ...grpc.CallOption) (*RemoveFileResponse, error)
 }
 
 type learnFSClient struct {
@@ -114,6 +115,15 @@ func (x *learnFSOpenDirClient) Recv() (*DirEntryResponse, error) {
 	return m, nil
 }
 
+func (c *learnFSClient) RemoveFile(ctx context.Context, in *RemoveFileRequest, opts ...grpc.CallOption) (*RemoveFileResponse, error) {
+	out := new(RemoveFileResponse)
+	err := c.cc.Invoke(ctx, "/learnfs.LearnFS/RemoveFile", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // LearnFSServer is the server API for LearnFS service.
 // All implementations must embed UnimplementedLearnFSServer
 // for forward compatibility
@@ -124,6 +134,7 @@ type LearnFSServer interface {
 	SetAttr(context.Context, *SetAttrRequest) (*SetAttrResponse, error)
 	Lookup(context.Context, *LookupRequest) (*LookupResponse, error)
 	OpenDir(LearnFS_OpenDirServer) error
+	RemoveFile(context.Context, *RemoveFileRequest) (*RemoveFileResponse, error)
 	mustEmbedUnimplementedLearnFSServer()
 }
 
@@ -148,6 +159,9 @@ func (UnimplementedLearnFSServer) Lookup(context.Context, *LookupRequest) (*Look
 }
 func (UnimplementedLearnFSServer) OpenDir(LearnFS_OpenDirServer) error {
 	return status.Errorf(codes.Unimplemented, "method OpenDir not implemented")
+}
+func (UnimplementedLearnFSServer) RemoveFile(context.Context, *RemoveFileRequest) (*RemoveFileResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveFile not implemented")
 }
 func (UnimplementedLearnFSServer) mustEmbedUnimplementedLearnFSServer() {}
 
@@ -278,6 +292,24 @@ func (x *learnFSOpenDirServer) Recv() (*NextDirEntryRequest, error) {
 	return m, nil
 }
 
+func _LearnFS_RemoveFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveFileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LearnFSServer).RemoveFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/learnfs.LearnFS/RemoveFile",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LearnFSServer).RemoveFile(ctx, req.(*RemoveFileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // LearnFS_ServiceDesc is the grpc.ServiceDesc for LearnFS service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -304,6 +336,10 @@ var LearnFS_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Lookup",
 			Handler:    _LearnFS_Lookup_Handler,
+		},
+		{
+			MethodName: "RemoveFile",
+			Handler:    _LearnFS_RemoveFile_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

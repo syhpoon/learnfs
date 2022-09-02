@@ -4,6 +4,7 @@ package fs
 
 type InodeAllocator interface {
 	AllocateInode() (*Inode, error)
+	DeallocateInode(InodePtr) error
 	IsAllocated(InodePtr) bool
 	GetBitmap() *Bitmap
 }

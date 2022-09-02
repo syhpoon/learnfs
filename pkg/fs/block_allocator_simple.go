@@ -50,6 +50,15 @@ func (ba *BlockAllocatorSimple) AllocateBlock() (*Block, error) {
 	return block, nil
 }
 
+func (ba *BlockAllocatorSimple) DeallocateBlock(ptr BlockPtr) error {
+	ba.Lock()
+	defer ba.Unlock()
+
+	ba.bitmap.Clear(ptr)
+
+	return nil
+}
+
 func (ba *BlockAllocatorSimple) IsAllocated(ptr BlockPtr) bool {
 	ba.RLock()
 	set := ba.bitmap.IsSet(ptr)

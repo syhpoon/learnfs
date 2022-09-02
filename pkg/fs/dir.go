@@ -181,6 +181,25 @@ func (dir *Directory) GetEntry(name string) (InodePtr, error) {
 	return ptr, nil
 }
 
+func (dir *Directory) DeleteEntry(name string) error {
+	dir.Lock()
+	delete(dir.name2inode, name)
+
+	for _, entries := range dir.entries {
+		for j, entry := range entries {
+			if entry != nil {
+				if entry.GetName() == name {
+					entries[j] = nil
+				}
+			}
+		}
+	}
+	dir.SetDirty(true)
+	dir.Unlock()
+
+	return nil
+}
+
 func (dir *Directory) GetEntries() []*DirEntry {
 	dir.RLock()
 	defer dir.RUnlock()
@@ -190,7 +209,7 @@ func (dir *Directory) GetEntries() []*DirEntry {
 	for blkPtr := range dir.entries {
 		for i := range dir.entries[blkPtr] {
 			if dir.entries[blkPtr][i] == nil {
-				break
+				continue
 			}
 
 			e := *dir.entries[blkPtr][i]

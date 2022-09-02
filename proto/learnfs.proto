@@ -12,6 +12,7 @@ service LearnFS {
     rpc SetAttr (SetAttrRequest) returns (SetAttrResponse);
     rpc Lookup (LookupRequest) returns (LookupResponse);
     rpc OpenDir (stream NextDirEntryRequest) returns (stream DirEntryResponse);
+    rpc RemoveFile (RemoveFileRequest) returns (RemoveFileResponse);
 }
 
 // Inode attributes
@@ -121,5 +122,14 @@ message FlushRequest {
 }
 
 message FlushResponse {
+    uint32 errno = 1;
+}
+
+message RemoveFileRequest {
+    uint32 dir_inode = 1;
+    string name = 2;
+}
+
+message RemoveFileResponse {
     uint32 errno = 1;
 }

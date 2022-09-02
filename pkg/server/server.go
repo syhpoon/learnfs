@@ -219,7 +219,7 @@ func (s *Server) OpenDir(stream proto.LearnFS_OpenDirServer) error {
 func (s *Server) CreateFile(
 	ctx context.Context, req *proto.CreateFileRequest) (*proto.CreateFileResponse, error) {
 
-	log.Debug().Interface("req", req).Msg("CreateFile request")
+	log.Debug().Interface("req", req).Msg("CreateFile")
 
 	inode, err := s.fs.CreateFile(
 		req.DirInode,
@@ -256,6 +256,28 @@ func (s *Server) Flush(ctx context.Context, req *proto.FlushRequest) (*proto.Flu
 	}
 
 	return &proto.FlushResponse{}, nil
+}
+
+func (s *Server) RemoveFile(
+	ctx context.Context, req *proto.RemoveFileRequest) (*proto.RemoveFileResponse, error) {
+
+	log.Debug().Interface("req", req).Msg("RemoveFile")
+
+	err := s.fs.RemoveFile(req.DirInode, req.Name)
+	if errors.Is(err, fs.ErrorNotFound) {
+		return &proto.RemoveFileResponse{Errno: uint32(syscall.ENOENT)}, nil
+	}
+
+	if err != nil {
+		log.Error().Err(err).
+			Uint32("ptr", req.DirInode).
+			Str("name", req.Name).
+			Msg("failed to remove file")
+
+		return nil, status.Errorf(codes.Internal, "internal error")
+	}
+
+	return &proto.RemoveFileResponse{}, nil
 }
 
 func (s *Server) inode2attr(inode *fs.Inode) *proto.Attr {
