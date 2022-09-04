@@ -28,7 +28,10 @@ type LearnFSClient interface {
 	SetAttr(ctx context.Context, in *SetAttrRequest, opts ...grpc.CallOption) (*SetAttrResponse, error)
 	Lookup(ctx context.Context, in *LookupRequest, opts ...grpc.CallOption) (*LookupResponse, error)
 	OpenDir(ctx context.Context, opts ...grpc.CallOption) (LearnFS_OpenDirClient, error)
+	OpenFile(ctx context.Context, in *OpenFileRequest, opts ...grpc.CallOption) (*OpenFileResponse, error)
+	Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error)
 	RemoveFile(ctx context.Context, in *RemoveFileRequest, opts ...grpc.CallOption) (*RemoveFileResponse, error)
+	Write(ctx context.Context, in *WriteRequest, opts ...grpc.CallOption) (*WriteResponse, error)
 }
 
 type learnFSClient struct {
@@ -115,9 +118,36 @@ func (x *learnFSOpenDirClient) Recv() (*DirEntryResponse, error) {
 	return m, nil
 }
 
+func (c *learnFSClient) OpenFile(ctx context.Context, in *OpenFileRequest, opts ...grpc.CallOption) (*OpenFileResponse, error) {
+	out := new(OpenFileResponse)
+	err := c.cc.Invoke(ctx, "/learnfs.LearnFS/OpenFile", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *learnFSClient) Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error) {
+	out := new(ReadResponse)
+	err := c.cc.Invoke(ctx, "/learnfs.LearnFS/Read", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *learnFSClient) RemoveFile(ctx context.Context, in *RemoveFileRequest, opts ...grpc.CallOption) (*RemoveFileResponse, error) {
 	out := new(RemoveFileResponse)
 	err := c.cc.Invoke(ctx, "/learnfs.LearnFS/RemoveFile", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *learnFSClient) Write(ctx context.Context, in *WriteRequest, opts ...grpc.CallOption) (*WriteResponse, error) {
+	out := new(WriteResponse)
+	err := c.cc.Invoke(ctx, "/learnfs.LearnFS/Write", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +164,10 @@ type LearnFSServer interface {
 	SetAttr(context.Context, *SetAttrRequest) (*SetAttrResponse, error)
 	Lookup(context.Context, *LookupRequest) (*LookupResponse, error)
 	OpenDir(LearnFS_OpenDirServer) error
+	OpenFile(context.Context, *OpenFileRequest) (*OpenFileResponse, error)
+	Read(context.Context, *ReadRequest) (*ReadResponse, error)
 	RemoveFile(context.Context, *RemoveFileRequest) (*RemoveFileResponse, error)
+	Write(context.Context, *WriteRequest) (*WriteResponse, error)
 	mustEmbedUnimplementedLearnFSServer()
 }
 
@@ -160,8 +193,17 @@ func (UnimplementedLearnFSServer) Lookup(context.Context, *LookupRequest) (*Look
 func (UnimplementedLearnFSServer) OpenDir(LearnFS_OpenDirServer) error {
 	return status.Errorf(codes.Unimplemented, "method OpenDir not implemented")
 }
+func (UnimplementedLearnFSServer) OpenFile(context.Context, *OpenFileRequest) (*OpenFileResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method OpenFile not implemented")
+}
+func (UnimplementedLearnFSServer) Read(context.Context, *ReadRequest) (*ReadResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Read not implemented")
+}
 func (UnimplementedLearnFSServer) RemoveFile(context.Context, *RemoveFileRequest) (*RemoveFileResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RemoveFile not implemented")
+}
+func (UnimplementedLearnFSServer) Write(context.Context, *WriteRequest) (*WriteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Write not implemented")
 }
 func (UnimplementedLearnFSServer) mustEmbedUnimplementedLearnFSServer() {}
 
@@ -292,6 +334,42 @@ func (x *learnFSOpenDirServer) Recv() (*NextDirEntryRequest, error) {
 	return m, nil
 }
 
+func _LearnFS_OpenFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OpenFileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LearnFSServer).OpenFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/learnfs.LearnFS/OpenFile",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LearnFSServer).OpenFile(ctx, req.(*OpenFileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _LearnFS_Read_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LearnFSServer).Read(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/learnfs.LearnFS/Read",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LearnFSServer).Read(ctx, req.(*ReadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _LearnFS_RemoveFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RemoveFileRequest)
 	if err := dec(in); err != nil {
@@ -306,6 +384,24 @@ func _LearnFS_RemoveFile_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(LearnFSServer).RemoveFile(ctx, req.(*RemoveFileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _LearnFS_Write_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WriteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LearnFSServer).Write(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/learnfs.LearnFS/Write",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LearnFSServer).Write(ctx, req.(*WriteRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -338,8 +434,20 @@ var LearnFS_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _LearnFS_Lookup_Handler,
 		},
 		{
+			MethodName: "OpenFile",
+			Handler:    _LearnFS_OpenFile_Handler,
+		},
+		{
+			MethodName: "Read",
+			Handler:    _LearnFS_Read_Handler,
+		},
+		{
 			MethodName: "RemoveFile",
 			Handler:    _LearnFS_RemoveFile_Handler,
+		},
+		{
+			MethodName: "Write",
+			Handler:    _LearnFS_Write_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

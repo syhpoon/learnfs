@@ -267,6 +267,73 @@ func (fs *Filesystem) Lookup(ptr InodePtr, name string) (*Inode, error) {
 	return inode, nil
 }
 
+func (fs *Filesystem) Read(ptr InodePtr, offset int64, size int) ([]byte, error) {
+	inode, err := fs.inodeCache.GetInode(ptr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get inode %d: %w", ptr, err)
+	}
+
+	inode.RLock()
+	defer inode.RUnlock()
+
+	// Get the logical block for the offset
+	blockIdx := offset / int64(fs.blockSize)
+	// Get the offset within the block
+	offset = offset % int64(fs.blockSize)
+
+	if inode.Blocks[blockIdx] == 0 {
+		return nil, nil
+	} else {
+		blk, err := fs.blockCache.GetBlock(inode.Blocks[blockIdx])
+		if err != nil {
+			return nil, fmt.Errorf("failed to get block %d: %w", inode.Blocks[blockIdx], err)
+		}
+
+		return blk.read(int(offset), size), nil
+	}
+}
+
+func (fs *Filesystem) Write(ptr InodePtr, offset int64, data []byte) (int, error) {
+	inode, err := fs.inodeCache.GetInode(ptr)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get inode %d: %w", ptr, err)
+	}
+
+	inode.Lock()
+	defer inode.Unlock()
+
+	// Get the logical block for the offset
+	blockIdx := offset / int64(fs.blockSize)
+	// Get the offset within the block
+	offset = offset % int64(fs.blockSize)
+
+	var blk *Block
+
+	// Need to allocate a new block
+	if inode.Blocks[blockIdx] == 0 {
+		blk, err = fs.blockAllocator.AllocateBlock()
+		if err != nil {
+			return 0, fmt.Errorf("failed to allocate a new block: %w", err)
+		}
+
+		inode.Blocks[blockIdx] = blk.ptr
+	} else {
+		blk, err = fs.blockCache.GetBlock(inode.Blocks[blockIdx])
+		if err != nil {
+			return 0, fmt.Errorf("failed to get block %d: %w", inode.Blocks[blockIdx], err)
+		}
+	}
+
+	// TODO: need to handle the case where data spans the block boundary
+	blk.write(int(offset), data)
+	inode.Size += uint32(len(data))
+
+	blk.SetDirty(true)
+	inode.SetDirty(true)
+
+	return len(data), nil
+}
+
 func (fs *Filesystem) Shutdown() error {
 	return fs.dev.Close()
 }

@@ -20,12 +20,23 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+type dirHandle struct {
+	stream proto.LearnFS_OpenDirClient
+	data   []byte
+}
+
+type fileHandle struct {
+	inode fuse.NodeID
+}
+
 type Session struct {
-	con        *fuse.Conn
-	cl         proto.LearnFSClient
-	dir        string
-	dirHandle  uint64
-	dirHandles map[uint64]*dirHandle
+	con         *fuse.Conn
+	cl          proto.LearnFSClient
+	dir         string
+	dirHandle   uint64
+	fileHandle  uint64
+	dirHandles  map[uint64]*dirHandle
+	fileHandles map[uint64]*fileHandle
 
 	sync.RWMutex
 }
@@ -42,11 +53,13 @@ func NewSession(dir string, cl proto.LearnFSClient) (*Session, error) {
 	}
 
 	ses := &Session{
-		con:        con,
-		dir:        dir,
-		cl:         cl,
-		dirHandle:  0,
-		dirHandles: map[uint64]*dirHandle{},
+		con:         con,
+		dir:         dir,
+		cl:          cl,
+		dirHandle:   0,
+		fileHandle:  0,
+		dirHandles:  map[uint64]*dirHandle{},
+		fileHandles: map[uint64]*fileHandle{},
 	}
 
 	return ses, nil
@@ -90,6 +103,8 @@ func (ses *Session) Start(ctx context.Context) {
 			ses.remove(ctx, r)
 		case *fuse.SetattrRequest:
 			ses.setAttr(ctx, r)
+		case *fuse.WriteRequest:
+			ses.write(ctx, r)
 		default:
 			fmt.Printf(">>> GOT REQ: %v (%T)\n", req, req)
 			req.RespondError(fmt.Errorf("WAT"))
@@ -163,30 +178,58 @@ func (ses *Session) open(ctx context.Context, req *fuse.OpenRequest) {
 
 	inode := req.Header.Node
 
-	stream, err := ses.cl.OpenDir(ctx)
-	if err != nil {
-		log.Error().Err(err).Msg("failed to open directory")
-		req.RespondError(err)
-		return
+	if req.Dir {
+		stream, err := ses.cl.OpenDir(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to open directory")
+			req.RespondError(err)
+			return
+		}
+
+		if err := stream.Send(&proto.NextDirEntryRequest{Inode: uint32(inode)}); err != nil {
+			log.Error().Err(err).Interface("inode", inode).Msg("failed to open directory")
+			req.RespondError(err)
+
+			return
+		}
+
+		handle := atomic.AddUint64(&ses.dirHandle, 1)
+
+		ses.Lock()
+		ses.dirHandles[handle] = &dirHandle{stream: stream}
+		ses.Unlock()
+
+		req.Respond(&fuse.OpenResponse{
+			Handle: fuse.HandleID(handle),
+			Flags:  fuse.OpenKeepCache,
+		})
+	} else {
+		resp, err := ses.cl.OpenFile(ctx, &proto.OpenFileRequest{
+			Inode: uint32(inode),
+		})
+
+		if err != nil {
+			log.Error().Uint64("inode", uint64(inode)).Err(err).Msg("failed to get file")
+			req.RespondError(err)
+			return
+		}
+
+		if resp.Errno != 0 {
+			req.RespondError(syscall.Errno(resp.Errno))
+			return
+		}
+
+		handle := atomic.AddUint64(&ses.fileHandle, 1)
+
+		ses.Lock()
+		ses.fileHandles[handle] = &fileHandle{inode: inode}
+		ses.Unlock()
+
+		req.Respond(&fuse.OpenResponse{
+			Handle: fuse.HandleID(handle),
+			Flags:  fuse.OpenKeepCache,
+		})
 	}
-
-	if err := stream.Send(&proto.NextDirEntryRequest{Inode: uint32(inode)}); err != nil {
-		log.Error().Err(err).Interface("inode", inode).Msg("failed to open directory")
-		req.RespondError(err)
-
-		return
-	}
-
-	handle := atomic.AddUint64(&ses.dirHandle, 1)
-
-	ses.Lock()
-	ses.dirHandles[handle] = &dirHandle{stream: stream}
-	ses.Unlock()
-
-	req.Respond(&fuse.OpenResponse{
-		Handle: fuse.HandleID(handle),
-		Flags:  fuse.OpenKeepCache,
-	})
 }
 
 func (ses *Session) read(ctx context.Context, req *fuse.ReadRequest) {
@@ -246,6 +289,31 @@ func (ses *Session) read(ctx context.Context, req *fuse.ReadRequest) {
 		resp := &fuse.ReadResponse{Data: make([]byte, 0, req.Size)}
 		fuseutil.HandleRead(req, resp, h.data)
 		req.Respond(resp)
+	} else {
+		h, ok := ses.fileHandles[handle]
+		if !ok {
+			ll.Msg("invalid file handle")
+			req.RespondError(syscall.EINVAL)
+			return
+		}
+
+		resp, err := ses.cl.Read(ctx, &proto.ReadRequest{
+			Inode: uint32(h.inode),
+			Size:  int32(req.Size),
+		})
+
+		if err != nil {
+			log.Error().Uint64("inode", uint64(h.inode)).Err(err).Msg("failed to read file")
+			req.RespondError(err)
+			return
+		}
+
+		if resp.Errno != 0 {
+			req.RespondError(syscall.Errno(resp.Errno))
+			return
+		}
+
+		req.Respond(&fuse.ReadResponse{Data: resp.Data})
 	}
 }
 
@@ -254,16 +322,16 @@ func (ses *Session) release(ctx context.Context, req *fuse.ReleaseRequest) {
 
 	handle := uint64(req.Handle)
 
+	ses.Lock()
 	if req.Dir {
-		ses.Lock()
 		_ = ses.dirHandles[handle].stream.CloseSend()
 		delete(ses.dirHandles, handle)
-		ses.Unlock()
-
-		req.Respond()
 	} else {
-		// TODO
+		delete(ses.fileHandles, handle)
 	}
+	ses.Unlock()
+
+	req.Respond()
 }
 
 func (ses *Session) remove(ctx context.Context, req *fuse.RemoveRequest) {
@@ -399,6 +467,38 @@ func (ses *Session) setAttr(ctx context.Context, req *fuse.SetattrRequest) {
 	}
 
 	req.Respond(&fuse.SetattrResponse{Attr: ses.attr(resp.Attr)})
+}
+
+func (ses *Session) write(ctx context.Context, req *fuse.WriteRequest) {
+	log.Debug().Interface("req", req).Msg("write")
+
+	ses.RLock()
+	h, ok := ses.fileHandles[uint64(req.Handle)]
+	ses.RUnlock()
+
+	if !ok {
+		req.RespondError(syscall.EINVAL)
+		return
+	}
+
+	resp, err := ses.cl.Write(ctx, &proto.WriteRequest{
+		Inode:  uint32(h.inode),
+		Offset: req.Offset,
+		Data:   req.Data,
+	})
+
+	if err != nil {
+		log.Error().Uint64("inode", uint64(req.Handle)).Err(err).Msg("failed to write to file")
+		req.RespondError(err)
+		return
+	}
+
+	if resp.Errno != 0 {
+		req.RespondError(syscall.Errno(resp.Errno))
+		return
+	}
+
+	req.Respond(&fuse.WriteResponse{Size: int(resp.Size)})
 }
 
 func (ses *Session) attr(a *proto.Attr) fuse.Attr {

@@ -14,7 +14,7 @@ import (
 	"github.com/samber/mo"
 )
 
-type BlockUring struct {
+type Uring struct {
 	ring     *uring.Ring
 	f        *os.File
 	fd       uintptr
@@ -27,9 +27,9 @@ type BlockUring struct {
 	sync.Mutex
 }
 
-var _ Device = &BlockUring{}
+var _ Device = &Uring{}
 
-func NewBlockUring(ctx context.Context, path string) (*BlockUring, error) {
+func NewUring(ctx context.Context, path string) (*Uring, error) {
 	// Get device capacity
 	size, err := getDeviceSize(path)
 	if err != nil {
@@ -53,7 +53,7 @@ func NewBlockUring(ctx context.Context, path string) (*BlockUring, error) {
 
 	ctx, cancel := context.WithCancel(ctx)
 
-	dev := &BlockUring{
+	dev := &Uring{
 		ring:     ring,
 		f:        f,
 		fd:       f.Fd(),
@@ -69,31 +69,31 @@ func NewBlockUring(ctx context.Context, path string) (*BlockUring, error) {
 	return dev, nil
 }
 
-func (bu *BlockUring) Capacity() uint64 {
+func (bu *Uring) Capacity() uint64 {
 	return bu.capacity
 }
 
-func (bu *BlockUring) Read(ops ...*Op) error {
+func (bu *Uring) Read(ops ...*Op) error {
 	return bu.run(ops, func(sqe *uring.SQEntry, opIdx int) {
 		uring.Read(sqe, 0, ops[opIdx].Buf)
 	})
 }
 
-func (bu *BlockUring) Write(ops ...*Op) error {
+func (bu *Uring) Write(ops ...*Op) error {
 	return bu.run(ops, func(sqe *uring.SQEntry, opIdx int) {
 		uring.Write(sqe, 0, ops[opIdx].Buf)
 	})
 }
 
-func (bu *BlockUring) getId() uint64 {
+func (bu *Uring) getId() uint64 {
 	return atomic.AddUint64(&bu.id, 1)
 }
 
-func (bu *BlockUring) isAligned(val uint64) bool {
+func (bu *Uring) isAligned(val uint64) bool {
 	return val%uint64(512) == 0
 }
 
-func (bu *BlockUring) run(ops []*Op, cb func(*uring.SQEntry, int)) error {
+func (bu *Uring) run(ops []*Op, cb func(*uring.SQEntry, int)) error {
 	id := bu.getId()
 	ch := make(chan mo.Result[int32], len(ops))
 
@@ -147,7 +147,7 @@ func (bu *BlockUring) run(ops []*Op, cb func(*uring.SQEntry, int)) error {
 	return err
 }
 
-func (bu *BlockUring) Close() error {
+func (bu *Uring) Close() error {
 	bu.cancel()
 
 	_ = bu.ring.Close()
@@ -156,7 +156,7 @@ func (bu *BlockUring) Close() error {
 	return nil
 }
 
-func (bu *BlockUring) poll() {
+func (bu *Uring) poll() {
 	for {
 		cqe, err := bu.ring.GetCQEntry(1)
 		if err == syscall.EINTR {

@@ -30,7 +30,7 @@ var Cmd = &cobra.Command{
 
 		logger.Init()
 
-		dev, err := device.NewBlockUring(context.Background(), args[0])
+		dev, err := device.NewUring(context.Background(), args[0])
 		if err != nil {
 			log.Fatal().Err(err).Msg("failed to open device")
 		}

@@ -9,9 +9,6 @@ build:
 proto:
 	cd proto && ./gen-pb.sh
 
-fuzz:
-	go test -v -fuzz=. -fuzztime 1m learnfs/...
-
 test:
 	go test -v learnfs/...
 

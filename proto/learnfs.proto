@@ -12,7 +12,10 @@ service LearnFS {
     rpc SetAttr (SetAttrRequest) returns (SetAttrResponse);
     rpc Lookup (LookupRequest) returns (LookupResponse);
     rpc OpenDir (stream NextDirEntryRequest) returns (stream DirEntryResponse);
+    rpc OpenFile (OpenFileRequest) returns (OpenFileResponse);
+    rpc Read (ReadRequest) returns (ReadResponse);
     rpc RemoveFile (RemoveFileRequest) returns (RemoveFileResponse);
+    rpc Write (WriteRequest) returns (WriteResponse);
 }
 
 // Inode attributes
@@ -102,6 +105,14 @@ message DirEntryResponse {
     DirEntry entry = 2;
 }
 
+message OpenFileRequest {
+    uint32 inode = 1;
+}
+
+message OpenFileResponse {
+    uint32 errno = 1;
+}
+
 message CreateFileRequest {
     uint32 dir_inode = 1;
     string name = 2;
@@ -125,6 +136,17 @@ message FlushResponse {
     uint32 errno = 1;
 }
 
+message ReadRequest {
+    uint32 inode = 1;
+    int64 offset = 2;
+    int32 size = 3;
+}
+
+message ReadResponse {
+    uint32 errno = 1;
+    bytes data = 2;
+}
+
 message RemoveFileRequest {
     uint32 dir_inode = 1;
     string name = 2;
@@ -132,4 +154,15 @@ message RemoveFileRequest {
 
 message RemoveFileResponse {
     uint32 errno = 1;
+}
+
+message WriteRequest {
+    uint32 inode = 1;
+    int64 offset = 2;
+    bytes data = 3;
+}
+
+message WriteResponse {
+    uint32 errno = 1;
+    int32 size = 2;
 }

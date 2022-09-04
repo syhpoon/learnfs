@@ -17,7 +17,7 @@ var Cmd = &cobra.Command{
 	Short: "Create a new filesystem on a given device",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		dev, err := device.NewBlockUring(context.Background(), args[0])
+		dev, err := device.NewUring(context.Background(), args[0])
 		if err != nil {
 			log.Fatalf("failed to open device: %v", err)
 		}

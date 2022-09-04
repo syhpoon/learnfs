@@ -3,6 +3,7 @@
 package fs
 
 import (
+	"bytes"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -38,6 +39,31 @@ func (blk *Block) Size() int {
 
 func (blk *Block) Buf() Buf {
 	return blk.data
+}
+
+func (blk *Block) write(offset int, data []byte) {
+	blk.Lock()
+	copy(blk.data[offset:len(data)], data)
+	blk.Unlock()
+}
+
+func (blk *Block) read(offset int, size int) []byte {
+	blk.RLock()
+	defer blk.RUnlock()
+
+	idx := bytes.IndexByte(blk.data, 0)
+	if idx < 0 {
+		return nil
+	}
+
+	if idx > size-1 {
+		idx = size - 1
+	}
+
+	buf := make([]byte, idx+1)
+	copy(buf, blk.data[offset:len(buf)])
+
+	return buf
 }
 
 func (blk *Block) SetDirty(dirty bool) {

@@ -74,7 +74,7 @@ func RunServer(ctx context.Context, params Params) error {
 func (s *Server) GetAttr(
 	ctx context.Context, req *proto.GetAttrRequest) (*proto.GetAttrResponse, error) {
 
-	log.Debug().Interface("req", req).Msg("GetAttr request")
+	log.Debug().Interface("req", req).Msg("GetAttr")
 
 	inode, err := s.fs.GetInode(req.Inode)
 
@@ -94,7 +94,7 @@ func (s *Server) GetAttr(
 func (s *Server) SetAttr(
 	ctx context.Context, req *proto.SetAttrRequest) (*proto.SetAttrResponse, error) {
 
-	log.Debug().Interface("req", req).Msg("SetAttr request")
+	log.Debug().Interface("req", req).Msg("SetAttr")
 
 	inode, err := s.fs.GetInode(req.Inode)
 
@@ -216,6 +216,24 @@ func (s *Server) OpenDir(stream proto.LearnFS_OpenDirServer) error {
 	}
 }
 
+func (s *Server) OpenFile(
+	ctx context.Context, req *proto.OpenFileRequest) (*proto.OpenFileResponse, error) {
+
+	log.Debug().Interface("req", req).Msg("OpenFile")
+
+	_, err := s.fs.GetInode(req.Inode)
+	if err != nil {
+		if errors.Is(err, fs.ErrorNotFound) {
+			return &proto.OpenFileResponse{Errno: uint32(syscall.ENOENT)}, nil
+		}
+
+		log.Error().Err(err).Uint32("ptr", req.Inode).Msg("failed to get inode")
+		return nil, status.Errorf(codes.Internal, "internal error")
+	}
+
+	return &proto.OpenFileResponse{}, nil
+}
+
 func (s *Server) CreateFile(
 	ctx context.Context, req *proto.CreateFileRequest) (*proto.CreateFileResponse, error) {
 
@@ -258,6 +276,30 @@ func (s *Server) Flush(ctx context.Context, req *proto.FlushRequest) (*proto.Flu
 	return &proto.FlushResponse{}, nil
 }
 
+func (s *Server) Read(
+	ctx context.Context, req *proto.ReadRequest) (*proto.ReadResponse, error) {
+
+	log.Debug().Interface("req", req).Msg("Read")
+
+	_, err := s.fs.GetInode(req.Inode)
+	if err != nil {
+		if errors.Is(err, fs.ErrorNotFound) {
+			return &proto.ReadResponse{Errno: uint32(syscall.ENOENT)}, nil
+		}
+
+		log.Error().Err(err).Uint32("ptr", req.Inode).Msg("failed to get inode")
+		return nil, status.Errorf(codes.Internal, "internal error")
+	}
+
+	data, err := s.fs.Read(req.Inode, req.Offset, int(req.Size))
+	if err != nil {
+		log.Error().Err(err).Uint32("ptr", req.Inode).Msg("failed to read file data")
+		return nil, status.Errorf(codes.Internal, "internal error")
+	}
+
+	return &proto.ReadResponse{Data: data}, nil
+}
+
 func (s *Server) RemoveFile(
 	ctx context.Context, req *proto.RemoveFileRequest) (*proto.RemoveFileResponse, error) {
 
@@ -278,6 +320,30 @@ func (s *Server) RemoveFile(
 	}
 
 	return &proto.RemoveFileResponse{}, nil
+}
+
+func (s *Server) Write(
+	ctx context.Context, req *proto.WriteRequest) (*proto.WriteResponse, error) {
+
+	log.Debug().Interface("req", req).Msg("Write")
+
+	_, err := s.fs.GetInode(req.Inode)
+	if err != nil {
+		if errors.Is(err, fs.ErrorNotFound) {
+			return &proto.WriteResponse{Errno: uint32(syscall.ENOENT)}, nil
+		}
+
+		log.Error().Err(err).Uint32("ptr", req.Inode).Msg("failed to get inode")
+		return nil, status.Errorf(codes.Internal, "internal error")
+	}
+
+	size, err := s.fs.Write(req.Inode, req.Offset, req.Data)
+	if err != nil {
+		log.Error().Err(err).Uint32("ptr", req.Inode).Msg("failed to write file data")
+		return nil, status.Errorf(codes.Internal, "internal error")
+	}
+
+	return &proto.WriteResponse{Size: int32(size)}, nil
 }
 
 func (s *Server) inode2attr(inode *fs.Inode) *proto.Attr {
