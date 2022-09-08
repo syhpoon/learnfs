@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"sync"
 
-	"learnfs/pkg/device"
+	"github.com/syhpoon/learnfs/pkg/device"
 )
 
-type DirCache struct {
+type dirCache struct {
 	cache      map[InodePtr]*Directory
 	inodeCache *InodeCache
-	blockCache *BlockCache
-	pool       *BufPool
+	blockCache *blockCache
+	pool       *bufPool
 	blockSize  uint32
 	dev        device.Device
 	sb         *Superblock
@@ -21,14 +21,14 @@ type DirCache struct {
 	sync.RWMutex
 }
 
-func NewDirCache(
-	pool *BufPool,
+func newDirCache(
+	pool *bufPool,
 	inodeCache *InodeCache,
-	blockCache *BlockCache,
+	blockCache *blockCache,
 	sb *Superblock,
-	dev device.Device) *DirCache {
+	dev device.Device) *dirCache {
 
-	return &DirCache{
+	return &dirCache{
 		cache:      map[InodePtr]*Directory{},
 		pool:       pool,
 		inodeCache: inodeCache,
@@ -39,13 +39,13 @@ func NewDirCache(
 	}
 }
 
-func (dc *DirCache) AddDir(dir *Directory) {
-	dc.RLock()
+func (dc *dirCache) addDir(dir *Directory) {
+	dc.Lock()
 	dc.cache[dir.inode.Ptr()] = dir
-	dc.RUnlock()
+	dc.Unlock()
 }
 
-func (dc *DirCache) GetDir(ptr InodePtr) (*Directory, error) {
+func (dc *dirCache) getDir(ptr InodePtr) (*Directory, error) {
 	dc.RLock()
 	d, ok := dc.cache[ptr]
 	dc.RUnlock()
@@ -71,7 +71,7 @@ func (dc *DirCache) GetDir(ptr InodePtr) (*Directory, error) {
 	return d, nil
 }
 
-func (dc *DirCache) flush() error {
+func (dc *dirCache) flush() error {
 	dc.Lock()
 	defer dc.Unlock()
 

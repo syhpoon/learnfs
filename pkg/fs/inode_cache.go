@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"sync"
 
-	"learnfs/pkg/device"
+	"github.com/syhpoon/learnfs/pkg/device"
 )
 
 type InodeCache struct {
 	cache map[InodePtr]*Inode
 	dev   device.Device
-	pool  *BufPool
+	pool  *bufPool
 	sb    *Superblock
 	alloc InodeAllocator
 
@@ -20,7 +20,7 @@ type InodeCache struct {
 }
 
 func NewInodeCache(dev device.Device, alloc InodeAllocator,
-	pool *BufPool, sb *Superblock) *InodeCache {
+	pool *bufPool, sb *Superblock) *InodeCache {
 
 	return &InodeCache{
 		cache: map[InodePtr]*Inode{},
@@ -64,7 +64,7 @@ func (ic *InodeCache) GetInode(ptr InodePtr) (*Inode, error) {
 		return nil, ErrorNotFound
 	}
 
-	buf := ic.pool.GetRead()
+	buf := ic.pool.getRead()
 
 	op := &device.Op{
 		Buf:    buf,
@@ -75,7 +75,7 @@ func (ic *InodeCache) GetInode(ptr InodePtr) (*Inode, error) {
 		return nil, fmt.Errorf("failed to read inode %d: %w", ptr, err)
 	}
 
-	if ino, err := NewInodeFromBuf(ptr, buf); err != nil {
+	if ino, err := newInodeFromBuf(ptr, buf); err != nil {
 		return nil, err
 	} else {
 		ic.AddInode(ino)

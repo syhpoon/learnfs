@@ -2,7 +2,7 @@
 
 package fs
 
-// Block pointer
+// block pointer
 type BlockPtr = uint32
 
 // Inode pointer

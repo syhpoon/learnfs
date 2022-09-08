@@ -1,5 +1,5 @@
 BUILD=go build -ldflags "-s -w"
-PKG=learnfs/cmd
+PKG=github.com/syhpoon/learnfs/cmd
 
 .PHONY: fuzz test proto vuln
 
@@ -10,7 +10,7 @@ proto:
 	cd proto && ./gen-pb.sh
 
 test:
-	go test -v learnfs/...
+	go test -v ./...
 
 vuln:
 	govulncheck ./...

@@ -3,8 +3,8 @@
 package fs
 
 type BlockAllocator interface {
-	AllocateBlock() (*Block, error)
+	AllocateBlock() (*block, error)
 	DeallocateBlock(ptr BlockPtr) error
 	IsAllocated(BlockPtr) bool
-	GetBitmap() *Bitmap
+	GetBitmap() *bitmap
 }

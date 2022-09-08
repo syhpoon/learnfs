@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"learnfs/proto"
+	"github.com/syhpoon/learnfs/proto"
 
 	"bazil.org/fuse"
 	"bazil.org/fuse/fuseutil"

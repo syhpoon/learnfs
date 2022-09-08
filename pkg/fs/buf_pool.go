@@ -8,38 +8,38 @@ import (
 	"sync"
 )
 
-type BufPool struct {
+type bufPool struct {
 	pool      *sync.Pool
 	blockSize uint32
 }
 
-func NewBufPool(blockSize uint32) *BufPool {
+func newBufPool(blockSize uint32) *bufPool {
 	pool := &sync.Pool{
 		New: func() any {
 			return make(Buf, blockSize)
 		},
 	}
 
-	return &BufPool{
+	return &bufPool{
 		pool:      pool,
 		blockSize: blockSize,
 	}
 }
 
-func (bp *BufPool) GetRead() Buf {
+func (bp *bufPool) getRead() Buf {
 	return bp.pool.Get().(Buf)
 }
 
-func (bp *BufPool) GetWrite() Buf {
+func (bp *bufPool) getWrite() Buf {
 	return bp.pool.Get().(Buf)[:0]
 }
 
-func (bp *BufPool) Put(buf Buf) {
+func (bp *bufPool) put(buf Buf) {
 	bp.pool.Put(buf[:cap(buf)])
 }
 
-func serialize(pool *BufPool, objects ...any) (Buf, error) {
-	buf := pool.GetWrite()
+func serialize(pool *bufPool, objects ...any) (Buf, error) {
+	buf := pool.getWrite()
 	bbuf := bytes.NewBuffer(buf)
 
 	for i := range objects {

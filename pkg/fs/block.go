@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 )
 
-type Block struct {
+type block struct {
 	ptr   BlockPtr
 	data  Buf
 	dirty int32
@@ -16,29 +16,29 @@ type Block struct {
 	sync.RWMutex
 }
 
-func newBlock(ptr BlockPtr, size uint32) *Block {
+func newBlock(ptr BlockPtr, size uint32) *block {
 	return newBlockFromBuf(ptr, make(Buf, size))
 }
 
-func newBlockFromBuf(ptr BlockPtr, buf Buf) *Block {
-	return &Block{
+func newBlockFromBuf(ptr BlockPtr, buf Buf) *block {
+	return &block{
 		ptr:   ptr,
 		data:  buf,
 		dirty: 0,
 	}
 }
 
-func (blk *Block) size() int {
+func (blk *block) size() int {
 	return len(blk.data)
 }
 
-func (blk *Block) write(offset int, data []byte) {
+func (blk *block) write(offset int, data []byte) {
 	blk.Lock()
 	copy(blk.data[offset:offset+len(data)], data)
 	blk.Unlock()
 }
 
-func (blk *Block) read(offset int, size int) []byte {
+func (blk *block) read(offset int, size int) []byte {
 	blk.RLock()
 	defer blk.RUnlock()
 
@@ -48,7 +48,7 @@ func (blk *Block) read(offset int, size int) []byte {
 	return buf
 }
 
-func (blk *Block) setDirty(dirty bool) {
+func (blk *block) setDirty(dirty bool) {
 	val := int32(1)
 	if !dirty {
 		val = 0
@@ -57,11 +57,11 @@ func (blk *Block) setDirty(dirty bool) {
 	atomic.StoreInt32(&blk.dirty, val)
 }
 
-func (blk *Block) isDirty() bool {
+func (blk *block) isDirty() bool {
 	return atomic.LoadInt32(&blk.dirty) == 1
 }
 
-func (blk *Block) String() string {
-	return fmt.Sprintf("Block{ptr=%d, size=%d, dirty=%v}",
+func (blk *block) String() string {
+	return fmt.Sprintf("block{ptr=%d, size=%d, dirty=%v}",
 		blk.ptr, len(blk.data), blk.dirty)
 }

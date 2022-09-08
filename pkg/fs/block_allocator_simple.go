@@ -7,29 +7,29 @@ import (
 	"sync"
 )
 
-var _ BlockAllocator = &BlockAllocatorSimple{}
+var _ BlockAllocator = &blockAllocatorSimple{}
 
-type BlockAllocatorSimple struct {
-	bitmap        *Bitmap
+type blockAllocatorSimple struct {
+	bitmap        *bitmap
 	nextFreeBlock *BlockPtr
 	blockSize     uint32
 
 	sync.RWMutex
 }
 
-func NewBlockAllocatorSimple(bm *Bitmap, blockSize uint32) *BlockAllocatorSimple {
-	return &BlockAllocatorSimple{
+func newBlockAllocatorSimple(bm *bitmap, blockSize uint32) *blockAllocatorSimple {
+	return &blockAllocatorSimple{
 		bitmap:        bm,
-		nextFreeBlock: bm.NextClearBit(0),
+		nextFreeBlock: bm.nextClearBit(0),
 		blockSize:     blockSize,
 	}
 }
 
-func (ba *BlockAllocatorSimple) GetBitmap() *Bitmap {
+func (ba *blockAllocatorSimple) GetBitmap() *bitmap {
 	return ba.bitmap
 }
 
-func (ba *BlockAllocatorSimple) AllocateBlock() (*Block, error) {
+func (ba *blockAllocatorSimple) AllocateBlock() (*block, error) {
 	var ptr BlockPtr
 
 	ba.Lock()
@@ -42,26 +42,26 @@ func (ba *BlockAllocatorSimple) AllocateBlock() (*Block, error) {
 	}
 
 	// Mark the block as used
-	ba.bitmap.Set(ptr)
+	ba.bitmap.set(ptr)
 
 	block := newBlock(ptr, ba.blockSize)
-	ba.nextFreeBlock = ba.bitmap.NextClearBit(ptr)
+	ba.nextFreeBlock = ba.bitmap.nextClearBit(ptr)
 
 	return block, nil
 }
 
-func (ba *BlockAllocatorSimple) DeallocateBlock(ptr BlockPtr) error {
+func (ba *blockAllocatorSimple) DeallocateBlock(ptr BlockPtr) error {
 	ba.Lock()
 	defer ba.Unlock()
 
-	ba.bitmap.Clear(ptr)
+	ba.bitmap.clear(ptr)
 
 	return nil
 }
 
-func (ba *BlockAllocatorSimple) IsAllocated(ptr BlockPtr) bool {
+func (ba *blockAllocatorSimple) IsAllocated(ptr BlockPtr) bool {
 	ba.RLock()
-	set := ba.bitmap.IsSet(ptr)
+	set := ba.bitmap.isSet(ptr)
 	ba.RUnlock()
 
 	return set

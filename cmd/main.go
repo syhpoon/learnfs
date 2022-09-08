@@ -5,10 +5,10 @@ package main
 import (
 	"os"
 
-	"learnfs/cmd/info"
-	"learnfs/cmd/mkfs"
-	"learnfs/cmd/mount"
-	"learnfs/cmd/server"
+	"github.com/syhpoon/learnfs/cmd/info"
+	"github.com/syhpoon/learnfs/cmd/mkfs"
+	"github.com/syhpoon/learnfs/cmd/mount"
+	"github.com/syhpoon/learnfs/cmd/server"
 
 	"github.com/spf13/cobra"
 )

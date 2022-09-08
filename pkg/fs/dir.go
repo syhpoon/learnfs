@@ -8,23 +8,23 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"learnfs/pkg/device"
+	"github.com/syhpoon/learnfs/pkg/device"
 )
 
 type Directory struct {
 	inode      *Inode
 	name2inode map[string]InodePtr
 	entries    map[BlockPtr][]*DirEntry
-	cache      *BlockCache
+	cache      *blockCache
 	alloc      BlockAllocator
-	pool       *BufPool
+	pool       *bufPool
 	blockSize  uint32
 	dirty      int32
 
 	sync.RWMutex
 }
 
-func NewDirectory(inode *Inode, cache *BlockCache, pool *BufPool, blockSize uint32) *Directory {
+func NewDirectory(inode *Inode, cache *blockCache, pool *bufPool, blockSize uint32) *Directory {
 	entries := make(map[BlockPtr][]*DirEntry)
 
 	// For every inode block create a slice of nil dir entries to represent
@@ -44,14 +44,14 @@ func NewDirectory(inode *Inode, cache *BlockCache, pool *BufPool, blockSize uint
 	return dir
 }
 
-func LoadDirectory(inode *Inode, cache *BlockCache,
-	pool *BufPool, blockSize uint32) (*Directory, error) {
+func LoadDirectory(inode *Inode, cache *blockCache,
+	pool *bufPool, blockSize uint32) (*Directory, error) {
 
 	dir := NewDirectory(inode, cache, pool, blockSize)
 
 	// For every block load the corresponding dir entries
 	for _, blkPtr := range inode.GetBlockPtrs() {
-		blk, err := cache.GetBlock(blkPtr)
+		blk, err := cache.getBlock(blkPtr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load block %d: %w", blkPtr, err)
 		}

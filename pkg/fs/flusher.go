@@ -8,16 +8,16 @@ import (
 	"sync"
 	"time"
 
-	"learnfs/pkg/device"
+	"github.com/syhpoon/learnfs/pkg/device"
 
 	"github.com/rs/zerolog/log"
 )
 
 type flusher struct {
-	pool           *BufPool
-	blockCache     *BlockCache
+	pool           *bufPool
+	blockCache     *blockCache
 	inodeCache     *InodeCache
-	dirCache       *DirCache
+	dirCache       *dirCache
 	sb             *Superblock
 	inodeAllocator InodeAllocator
 	blockAllocator BlockAllocator
@@ -78,7 +78,7 @@ func (f *flusher) flushBitmaps() {
 	ib := f.inodeAllocator.GetBitmap()
 	bb := f.blockAllocator.GetBitmap()
 
-	bin, err := serialize(f.pool, ib.GetBuf(), bb.GetBuf())
+	bin, err := serialize(f.pool, ib.buf, bb.buf)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to serialize bitmaps")
 	}
@@ -95,7 +95,7 @@ func (f *flusher) flushBitmaps() {
 
 func (f *flusher) doFlushInode(inode *Inode) error {
 	var ops []*device.Op
-	var blocks []*Block
+	var blocks []*block
 
 	// Flush the inode itself
 	if inode.IsDirty() {
@@ -110,7 +110,7 @@ func (f *flusher) doFlushInode(inode *Inode) error {
 		})
 
 		for _, blockPtr := range inode.GetBlockPtrs() {
-			if block := f.blockCache.GetBlockNoFetch(blockPtr); block != nil && block.isDirty() {
+			if block := f.blockCache.getBlockNoFetch(blockPtr); block != nil && block.isDirty() {
 				ops = append(ops, &device.Op{
 					Buf:    block.data,
 					Offset: f.sb.BlockOffset(blockPtr),

@@ -1,4 +1,4 @@
-module learnfs
+module github.com/syhpoon/learnfs
 
 go 1.19
 

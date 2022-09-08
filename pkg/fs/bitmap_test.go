@@ -10,7 +10,7 @@ import (
 )
 
 func TestBitmap1(t *testing.T) {
-	b := NewBitmap(7, make([]byte, 1))
+	b := newBitmap(7, make([]byte, 1))
 
 	cases := []tuple.T2[uint32, uint8]{
 		tuple.New2[uint32, uint8](0, 1),
@@ -29,37 +29,37 @@ func TestBitmap1(t *testing.T) {
 		bit := tup.V1
 		val := tup.V2
 
-		b.Set(bit)
+		b.set(bit)
 		require.Equal(t, val, b.buf[0])
-		b.Clear(bit)
+		b.clear(bit)
 	}
 
 	require.Equal(t, uint8(0), b.buf[0])
 }
 
 func TestBitmap2(t *testing.T) {
-	b := NewBitmap(7, make([]byte, 1))
+	b := newBitmap(7, make([]byte, 1))
 
 	require.Equal(t, uint8(0), b.buf[0])
 
 	for i := uint32(0); i < 8; i++ {
-		b.Set(i)
+		b.set(i)
 	}
 
 	require.Equal(t, uint8(255), b.buf[0])
 
 	for i := uint32(0); i < 8; i++ {
-		b.Clear(i)
+		b.clear(i)
 	}
 
 	require.Equal(t, uint8(0), b.buf[0])
 }
 
 func TestBitmap3(t *testing.T) {
-	b := NewBitmap(512, make([]byte, 4))
+	b := newBitmap(512, make([]byte, 4))
 
-	b.Set(26)
-	require.True(t, b.IsSet(26))
+	b.set(26)
+	require.True(t, b.isSet(26))
 
 	require.Equal(t, uint8(0), b.buf[0])
 	require.Equal(t, uint8(0), b.buf[1])
@@ -68,21 +68,21 @@ func TestBitmap3(t *testing.T) {
 }
 
 func TestBitmapFindNext(t *testing.T) {
-	b := NewBitmap(7, make([]byte, 1))
+	b := newBitmap(7, make([]byte, 1))
 
-	require.Equal(t, *b.NextClearBit(0), uint32(0))
+	require.Equal(t, *b.nextClearBit(0), uint32(0))
 
-	b.Set(0)
-	b.Set(1)
-	b.Set(2)
-	b.Set(3)
-	b.Set(4)
-	require.Equal(t, *b.NextClearBit(0), uint32(5))
+	b.set(0)
+	b.set(1)
+	b.set(2)
+	b.set(3)
+	b.set(4)
+	require.Equal(t, *b.nextClearBit(0), uint32(5))
 
-	b.Set(6)
-	b.Set(7)
-	require.Equal(t, *b.NextClearBit(0), uint32(5))
+	b.set(6)
+	b.set(7)
+	require.Equal(t, *b.nextClearBit(0), uint32(5))
 
-	b.Set(5)
-	require.Equal(t, b.NextClearBit(0), (*uint32)(nil))
+	b.set(5)
+	require.Equal(t, b.nextClearBit(0), (*uint32)(nil))
 }

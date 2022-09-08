@@ -9,10 +9,10 @@ import (
 	"sync"
 	"syscall"
 
-	"learnfs/pkg/device"
-	"learnfs/pkg/fs"
-	"learnfs/pkg/logger"
-	"learnfs/pkg/server"
+	"github.com/syhpoon/learnfs/pkg/device"
+	"github.com/syhpoon/learnfs/pkg/fs"
+	"github.com/syhpoon/learnfs/pkg/logger"
+	"github.com/syhpoon/learnfs/pkg/server"
 
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"

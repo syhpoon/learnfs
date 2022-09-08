@@ -2,53 +2,49 @@
 
 package fs
 
-type Bitmap struct {
+type bitmap struct {
 	buf    []byte
 	maxBit uint32
 }
 
-func NewBitmap(size uint32, buf []byte) *Bitmap {
-	return &Bitmap{
+func newBitmap(size uint32, buf []byte) *bitmap {
+	return &bitmap{
 		buf:    buf,
 		maxBit: size,
 	}
 }
 
-func (bm *Bitmap) Size() int {
+func (bm *bitmap) size() int {
 	return len(bm.buf)
 }
 
-func (bm *Bitmap) Set(bit uint32) {
+func (bm *bitmap) set(bit uint32) {
 	idx, off := bm.convert(bit)
 
 	bm.buf[idx] |= 1 << off
 }
 
-func (bm *Bitmap) Clear(bit uint32) {
+func (bm *bitmap) clear(bit uint32) {
 	idx, off := bm.convert(bit)
 
 	bm.buf[idx] &= ^(1 << off)
 }
 
-func (bm *Bitmap) IsSet(bit uint32) bool {
+func (bm *bitmap) isSet(bit uint32) bool {
 	idx, off := bm.convert(bit)
 
 	return (bm.buf[idx]>>off)&1 > 0
 }
 
-func (bm *Bitmap) GetBuf() []byte {
-	return bm.buf
-}
-
 // Find the next free bit number searching from the given index
-func (bm *Bitmap) NextClearBit(from uint32) *uint32 {
+func (bm *bitmap) nextClearBit(from uint32) *uint32 {
 	scanned := uint32(0)
 	idx := from
 
 	for scanned <= bm.maxBit {
 		scanned += 1
 
-		if !bm.IsSet(idx) {
+		if !bm.isSet(idx) {
 			return &idx
 		}
 
@@ -59,7 +55,7 @@ func (bm *Bitmap) NextClearBit(from uint32) *uint32 {
 }
 
 // Convert raw bit number into vector index and an offset
-func (bm *Bitmap) convert(bit uint32) (uint32, uint8) {
+func (bm *bitmap) convert(bit uint32) (uint32, uint8) {
 	idx := bit / 8
 	off := bit - (idx * 8)
 

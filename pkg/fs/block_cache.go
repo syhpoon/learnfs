@@ -6,24 +6,24 @@ import (
 	"fmt"
 	"sync"
 
-	"learnfs/pkg/device"
+	"github.com/syhpoon/learnfs/pkg/device"
 )
 
-type BlockCache struct {
-	cache map[BlockPtr]*Block
+type blockCache struct {
+	cache map[BlockPtr]*block
 	dev   device.Device
-	pool  *BufPool
+	pool  *bufPool
 	sb    *Superblock
 	alloc BlockAllocator
 
 	sync.RWMutex
 }
 
-func NewBlockCache(
-	dev device.Device, alloc BlockAllocator, pool *BufPool, sb *Superblock) *BlockCache {
+func newBlockCache(
+	dev device.Device, alloc BlockAllocator, pool *bufPool, sb *Superblock) *blockCache {
 
-	return &BlockCache{
-		cache: map[BlockPtr]*Block{},
+	return &blockCache{
+		cache: map[BlockPtr]*block{},
 		pool:  pool,
 		sb:    sb,
 		dev:   dev,
@@ -31,13 +31,13 @@ func NewBlockCache(
 	}
 }
 
-func (bc *BlockCache) AddBlock(block *Block) {
+func (bc *blockCache) addBlock(block *block) {
 	bc.Lock()
 	bc.cache[block.ptr] = block
 	bc.Unlock()
 }
 
-func (bc *BlockCache) GetBlockNoFetch(ptr BlockPtr) *Block {
+func (bc *blockCache) getBlockNoFetch(ptr BlockPtr) *block {
 	bc.RLock()
 	block := bc.cache[ptr]
 	bc.RUnlock()
@@ -45,7 +45,7 @@ func (bc *BlockCache) GetBlockNoFetch(ptr BlockPtr) *Block {
 	return block
 }
 
-func (bc *BlockCache) GetBlock(ptr BlockPtr) (*Block, error) {
+func (bc *blockCache) getBlock(ptr BlockPtr) (*block, error) {
 	bc.RLock()
 	blk, ok := bc.cache[ptr]
 	bc.RUnlock()
@@ -58,7 +58,7 @@ func (bc *BlockCache) GetBlock(ptr BlockPtr) (*Block, error) {
 		return nil, ErrorNotFound
 	}
 
-	buf := bc.pool.GetRead()
+	buf := bc.pool.getRead()
 	op := &device.Op{
 		Buf:    buf,
 		Offset: bc.sb.BlockOffset(ptr),
@@ -69,12 +69,12 @@ func (bc *BlockCache) GetBlock(ptr BlockPtr) (*Block, error) {
 	}
 
 	blk = newBlockFromBuf(ptr, buf)
-	bc.AddBlock(blk)
+	bc.addBlock(blk)
 
 	return blk, nil
 }
 
-func (bc *BlockCache) flush() error {
+func (bc *blockCache) flush() error {
 	bc.Lock()
 	defer bc.Unlock()
 

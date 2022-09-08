@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"log"
 
-	"learnfs/pkg/device"
-	"learnfs/pkg/fs"
+	"github.com/syhpoon/learnfs/pkg/device"
+	"github.com/syhpoon/learnfs/pkg/fs"
 
 	"github.com/spf13/cobra"
 )

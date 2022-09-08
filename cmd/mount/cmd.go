@@ -8,9 +8,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"learnfs/pkg/fuse"
-	"learnfs/pkg/logger"
-	"learnfs/proto"
+	"github.com/syhpoon/learnfs/pkg/fuse"
+	"github.com/syhpoon/learnfs/pkg/logger"
+	"github.com/syhpoon/learnfs/proto"
 
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"

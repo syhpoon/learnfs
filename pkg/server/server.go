@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"learnfs/pkg/fs"
-	"learnfs/proto"
+	"github.com/syhpoon/learnfs/pkg/fs"
+	"github.com/syhpoon/learnfs/proto"
 
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"

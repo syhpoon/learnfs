@@ -7,27 +7,27 @@ import (
 	"sync"
 )
 
-var _ InodeAllocator = &InodeAllocatorSimple{}
+var _ InodeAllocator = &inodeAllocatorSimple{}
 
-type InodeAllocatorSimple struct {
-	bitmap        *Bitmap
+type inodeAllocatorSimple struct {
+	bitmap        *bitmap
 	nextFreeInode *InodePtr
 
 	sync.RWMutex
 }
 
-func NewInodeAllocatorSimple(bm *Bitmap) *InodeAllocatorSimple {
-	return &InodeAllocatorSimple{
+func newInodeAllocatorSimple(bm *bitmap) *inodeAllocatorSimple {
+	return &inodeAllocatorSimple{
 		bitmap:        bm,
-		nextFreeInode: bm.NextClearBit(0),
+		nextFreeInode: bm.nextClearBit(0),
 	}
 }
 
-func (ia *InodeAllocatorSimple) GetBitmap() *Bitmap {
+func (ia *inodeAllocatorSimple) GetBitmap() *bitmap {
 	return ia.bitmap
 }
 
-func (ia *InodeAllocatorSimple) AllocateInode() (*Inode, error) {
+func (ia *inodeAllocatorSimple) AllocateInode() (*Inode, error) {
 	var ptr InodePtr
 
 	ia.Lock()
@@ -40,26 +40,25 @@ func (ia *InodeAllocatorSimple) AllocateInode() (*Inode, error) {
 	}
 
 	// Mark inode as used
-	ia.bitmap.Set(ptr)
+	ia.bitmap.set(ptr)
 
-	inode := NewInode(ptr)
-	ia.nextFreeInode = ia.bitmap.NextClearBit(ptr)
+	inode := newInode(ptr)
+	ia.nextFreeInode = ia.bitmap.nextClearBit(ptr)
 
 	return inode, nil
 }
 
-func (ia *InodeAllocatorSimple) DeallocateInode(ptr InodePtr) error {
+func (ia *inodeAllocatorSimple) DeallocateInode(ptr InodePtr) error {
 	ia.Lock()
-	defer ia.Unlock()
-
-	ia.bitmap.Clear(ptr)
+	ia.bitmap.clear(ptr)
+	ia.Unlock()
 
 	return nil
 }
 
-func (ia *InodeAllocatorSimple) IsAllocated(ptr InodePtr) bool {
+func (ia *inodeAllocatorSimple) IsAllocated(ptr InodePtr) bool {
 	ia.RLock()
-	set := ia.bitmap.IsSet(ptr)
+	set := ia.bitmap.isSet(ptr)
 	ia.RUnlock()
 
 	return set

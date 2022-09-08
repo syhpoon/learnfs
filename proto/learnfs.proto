@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 package learnfs;
-option go_package = "learnfs/proto";
+option go_package = "github.com/syhpoon/learnfs/proto";
 
 import "google/protobuf/timestamp.proto";
 

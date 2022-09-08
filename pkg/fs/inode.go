@@ -56,7 +56,7 @@ type Inode struct {
 	sync.RWMutex
 }
 
-func NewInodeFromBuf(ptr InodePtr, buf Buf) (*Inode, error) {
+func newInodeFromBuf(ptr InodePtr, buf Buf) (*Inode, error) {
 	ino := &Inode{ptr: ptr}
 
 	err := ino.DecodeFrom(bytes.NewReader(buf))
@@ -67,7 +67,7 @@ func NewInodeFromBuf(ptr InodePtr, buf Buf) (*Inode, error) {
 	return ino, nil
 }
 
-func NewInode(ptr InodePtr) *Inode {
+func newInode(ptr InodePtr) *Inode {
 	ts := time.Now().UnixMicro()
 
 	return &Inode{
