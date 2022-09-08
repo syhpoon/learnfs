@@ -3,7 +3,6 @@
 package fs
 
 import (
-	"bytes"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -17,11 +16,11 @@ type Block struct {
 	sync.RWMutex
 }
 
-func NewBlock(ptr BlockPtr, size uint32) *Block {
-	return NewBlockFromBuf(ptr, make(Buf, size))
+func newBlock(ptr BlockPtr, size uint32) *Block {
+	return newBlockFromBuf(ptr, make(Buf, size))
 }
 
-func NewBlockFromBuf(ptr BlockPtr, buf Buf) *Block {
+func newBlockFromBuf(ptr BlockPtr, buf Buf) *Block {
 	return &Block{
 		ptr:   ptr,
 		data:  buf,
@@ -29,21 +28,13 @@ func NewBlockFromBuf(ptr BlockPtr, buf Buf) *Block {
 	}
 }
 
-func (blk *Block) Ptr() BlockPtr {
-	return blk.ptr
-}
-
-func (blk *Block) Size() int {
+func (blk *Block) size() int {
 	return len(blk.data)
-}
-
-func (blk *Block) Buf() Buf {
-	return blk.data
 }
 
 func (blk *Block) write(offset int, data []byte) {
 	blk.Lock()
-	copy(blk.data[offset:len(data)], data)
+	copy(blk.data[offset:offset+len(data)], data)
 	blk.Unlock()
 }
 
@@ -51,22 +42,13 @@ func (blk *Block) read(offset int, size int) []byte {
 	blk.RLock()
 	defer blk.RUnlock()
 
-	idx := bytes.IndexByte(blk.data, 0)
-	if idx < 0 {
-		return nil
-	}
-
-	if idx > size-1 {
-		idx = size - 1
-	}
-
-	buf := make([]byte, idx+1)
-	copy(buf, blk.data[offset:len(buf)])
+	buf := make([]byte, size)
+	copy(buf, blk.data[offset:size])
 
 	return buf
 }
 
-func (blk *Block) SetDirty(dirty bool) {
+func (blk *Block) setDirty(dirty bool) {
 	val := int32(1)
 	if !dirty {
 		val = 0
@@ -75,7 +57,7 @@ func (blk *Block) SetDirty(dirty bool) {
 	atomic.StoreInt32(&blk.dirty, val)
 }
 
-func (blk *Block) IsDirty() bool {
+func (blk *Block) isDirty() bool {
 	return atomic.LoadInt32(&blk.dirty) == 1
 }
 

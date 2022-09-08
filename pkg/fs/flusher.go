@@ -110,9 +110,9 @@ func (f *flusher) doFlushInode(inode *Inode) error {
 		})
 
 		for _, blockPtr := range inode.GetBlockPtrs() {
-			if block := f.blockCache.GetBlockNoFetch(blockPtr); block != nil && block.IsDirty() {
+			if block := f.blockCache.GetBlockNoFetch(blockPtr); block != nil && block.isDirty() {
 				ops = append(ops, &device.Op{
-					Buf:    block.Buf(),
+					Buf:    block.data,
 					Offset: f.sb.BlockOffset(blockPtr),
 				})
 
@@ -126,7 +126,7 @@ func (f *flusher) doFlushInode(inode *Inode) error {
 
 		inode.SetDirty(false)
 		for i := range blocks {
-			blocks[i].SetDirty(false)
+			blocks[i].setDirty(false)
 		}
 	}
 

@@ -63,10 +63,10 @@ func LoadDirectory(inode *Inode, cache *BlockCache,
 		end := DIR_ENTRY_SIZE
 
 		blk.Lock()
-		buf := blk.Buf()
+		buf := blk.data
 
 		entryIdx := 0
-		for end < blk.Size() {
+		for end < blk.size() {
 			slice := buf[start:end]
 			entry := &DirEntry{}
 

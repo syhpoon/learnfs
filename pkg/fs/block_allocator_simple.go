@@ -44,7 +44,7 @@ func (ba *BlockAllocatorSimple) AllocateBlock() (*Block, error) {
 	// Mark the block as used
 	ba.bitmap.Set(ptr)
 
-	block := NewBlock(ptr, ba.blockSize)
+	block := newBlock(ptr, ba.blockSize)
 	ba.nextFreeBlock = ba.bitmap.NextClearBit(ptr)
 
 	return block, nil

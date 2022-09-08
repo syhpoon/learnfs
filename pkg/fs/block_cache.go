@@ -32,9 +32,9 @@ func NewBlockCache(
 }
 
 func (bc *BlockCache) AddBlock(block *Block) {
-	bc.RLock()
-	bc.cache[block.Ptr()] = block
-	bc.RUnlock()
+	bc.Lock()
+	bc.cache[block.ptr] = block
+	bc.Unlock()
 }
 
 func (bc *BlockCache) GetBlockNoFetch(ptr BlockPtr) *Block {
@@ -68,7 +68,7 @@ func (bc *BlockCache) GetBlock(ptr BlockPtr) (*Block, error) {
 		return nil, fmt.Errorf("failed to read block %d: %w", ptr, err)
 	}
 
-	blk = NewBlockFromBuf(ptr, buf)
+	blk = newBlockFromBuf(ptr, buf)
 	bc.AddBlock(blk)
 
 	return blk, nil
@@ -81,12 +81,12 @@ func (bc *BlockCache) flush() error {
 	ops := make([]*device.Op, 0, 10)
 
 	for ptr, blk := range bc.cache {
-		if !blk.IsDirty() {
+		if !blk.isDirty() {
 			continue
 		}
 
 		ops = append(ops, &device.Op{
-			Buf:    blk.Buf(),
+			Buf:    blk.data,
 			Offset: bc.sb.BlockOffset(ptr),
 		})
 

@@ -276,20 +276,22 @@ func (fs *Filesystem) Read(ptr InodePtr, offset int64, size int) ([]byte, error)
 	inode.RLock()
 	defer inode.RUnlock()
 
-	// Get the logical block for the offset
-	blockIdx := offset / int64(fs.blockSize)
-	// Get the offset within the block
-	offset = offset % int64(fs.blockSize)
+	blockIdx, blockOffset := fs.blockOffset(offset)
 
 	if inode.Blocks[blockIdx] == 0 {
 		return nil, nil
 	} else {
+		start := blockIdx*int64(fs.blockSize) + blockOffset
+		if start+int64(size) > int64(inode.Size) {
+			size = int(int64(inode.Size) - offset)
+		}
+
 		blk, err := fs.blockCache.GetBlock(inode.Blocks[blockIdx])
 		if err != nil {
 			return nil, fmt.Errorf("failed to get block %d: %w", inode.Blocks[blockIdx], err)
 		}
 
-		return blk.read(int(offset), size), nil
+		return blk.read(int(blockOffset), size), nil
 	}
 }
 
@@ -302,10 +304,7 @@ func (fs *Filesystem) Write(ptr InodePtr, offset int64, data []byte) (int, error
 	inode.Lock()
 	defer inode.Unlock()
 
-	// Get the logical block for the offset
-	blockIdx := offset / int64(fs.blockSize)
-	// Get the offset within the block
-	offset = offset % int64(fs.blockSize)
+	blockIdx, blockOffset := fs.blockOffset(offset)
 
 	var blk *Block
 
@@ -325,11 +324,19 @@ func (fs *Filesystem) Write(ptr InodePtr, offset int64, data []byte) (int, error
 	}
 
 	// TODO: need to handle the case where data spans the block boundary
-	blk.write(int(offset), data)
-	inode.Size += uint32(len(data))
+	blk.write(int(blockOffset), data)
 
-	blk.SetDirty(true)
+	size := len(data)
+	start := blockIdx*int64(fs.blockSize) + blockOffset
+	newLen := start + int64(size)
+
+	if newLen > int64(inode.Size) {
+		inode.Size = uint32(newLen)
+	}
+
+	blk.setDirty(true)
 	inode.SetDirty(true)
+	fs.blockCache.AddBlock(blk)
 
 	return len(data), nil
 }
@@ -377,7 +384,7 @@ func (fs *Filesystem) createRootDir() error {
 	ino.SetDirty(true)
 	fs.inodeCache.AddInode(ino)
 
-	block.SetDirty(true)
+	block.setDirty(true)
 	fs.blockCache.AddBlock(block)
 
 	fs.dirCache.AddDir(dir)
@@ -410,4 +417,13 @@ func writeFsMetadata(pool *BufPool, sb *Superblock, dev device.Device) error {
 	}
 
 	return nil
+}
+
+func (fs *Filesystem) blockOffset(offset int64) (int64, int64) {
+	// Get the logical block for the offset
+	blockIdx := offset / int64(fs.blockSize)
+	// Get the offset within the block
+	blockOffset := offset % int64(fs.blockSize)
+
+	return blockIdx, blockOffset
 }

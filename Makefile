@@ -1,7 +1,7 @@
 BUILD=go build -ldflags "-s -w"
 PKG=learnfs/cmd
 
-.PHONY: fuzz test proto
+.PHONY: fuzz test proto vuln
 
 build:
 	@$(BUILD) -o learnfs $(PKG)
@@ -11,6 +11,9 @@ proto:
 
 test:
 	go test -v learnfs/...
+
+vuln:
+	govulncheck ./...
 
 dev:
 	rm -f dev.test
