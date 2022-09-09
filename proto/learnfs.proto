@@ -9,12 +9,13 @@ service LearnFS {
     rpc CreateFile (CreateFileRequest) returns (CreateFileResponse);
     rpc Flush (FlushRequest) returns (FlushResponse);
     rpc GetAttr (GetAttrRequest) returns (GetAttrResponse);
-    rpc SetAttr (SetAttrRequest) returns (SetAttrResponse);
     rpc Lookup (LookupRequest) returns (LookupResponse);
+    rpc Mkdir (MkdirRequest) returns (MkdirResponse);
     rpc OpenDir (stream NextDirEntryRequest) returns (stream DirEntryResponse);
     rpc OpenFile (OpenFileRequest) returns (OpenFileResponse);
     rpc Read (ReadRequest) returns (ReadResponse);
     rpc RemoveFile (RemoveFileRequest) returns (RemoveFileResponse);
+    rpc SetAttr (SetAttrRequest) returns (SetAttrResponse);
     rpc Write (WriteRequest) returns (WriteResponse);
 }
 
@@ -165,4 +166,18 @@ message WriteRequest {
 message WriteResponse {
     uint32 errno = 1;
     int32 size = 2;
+}
+
+message MkdirRequest {
+    uint32 dir_inode = 1;
+    string name = 2;
+    uint32 mode = 3;
+    uint32 umask = 4;
+    uint32 uid = 5;
+    uint32 gid = 6;
+}
+
+message MkdirResponse {
+    uint32 errno = 1;
+    Attr attr = 2;
 }

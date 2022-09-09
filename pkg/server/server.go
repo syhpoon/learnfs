@@ -276,6 +276,34 @@ func (s *Server) Flush(ctx context.Context, req *proto.FlushRequest) (*proto.Flu
 	return &proto.FlushResponse{}, nil
 }
 
+func (s *Server) Mkdir(
+	ctx context.Context, req *proto.MkdirRequest) (*proto.MkdirResponse, error) {
+
+	log.Debug().Interface("req", req).Msg("Mkdir")
+
+	inode, err := s.fs.CreateDirectory(
+		req.DirInode,
+		req.Name,
+		req.Mode,
+		req.Umask,
+		req.Uid,
+		req.Gid)
+	if errors.Is(err, fs.ErrorAlreadyExists) {
+		return &proto.MkdirResponse{Errno: uint32(syscall.EEXIST)}, nil
+	}
+
+	if err != nil {
+		log.Error().Err(err).
+			Uint32("ptr", req.DirInode).
+			Str("name", req.Name).
+			Msg("failed to create directory")
+
+		return nil, status.Errorf(codes.Internal, "internal error")
+	}
+
+	return &proto.MkdirResponse{Attr: s.inode2attr(inode)}, nil
+}
+
 func (s *Server) Read(
 	ctx context.Context, req *proto.ReadRequest) (*proto.ReadResponse, error) {
 

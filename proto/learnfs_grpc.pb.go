@@ -25,12 +25,13 @@ type LearnFSClient interface {
 	CreateFile(ctx context.Context, in *CreateFileRequest, opts ...grpc.CallOption) (*CreateFileResponse, error)
 	Flush(ctx context.Context, in *FlushRequest, opts ...grpc.CallOption) (*FlushResponse, error)
 	GetAttr(ctx context.Context, in *GetAttrRequest, opts ...grpc.CallOption) (*GetAttrResponse, error)
-	SetAttr(ctx context.Context, in *SetAttrRequest, opts ...grpc.CallOption) (*SetAttrResponse, error)
 	Lookup(ctx context.Context, in *LookupRequest, opts ...grpc.CallOption) (*LookupResponse, error)
+	Mkdir(ctx context.Context, in *MkdirRequest, opts ...grpc.CallOption) (*MkdirResponse, error)
 	OpenDir(ctx context.Context, opts ...grpc.CallOption) (LearnFS_OpenDirClient, error)
 	OpenFile(ctx context.Context, in *OpenFileRequest, opts ...grpc.CallOption) (*OpenFileResponse, error)
 	Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error)
 	RemoveFile(ctx context.Context, in *RemoveFileRequest, opts ...grpc.CallOption) (*RemoveFileResponse, error)
+	SetAttr(ctx context.Context, in *SetAttrRequest, opts ...grpc.CallOption) (*SetAttrResponse, error)
 	Write(ctx context.Context, in *WriteRequest, opts ...grpc.CallOption) (*WriteResponse, error)
 }
 
@@ -69,18 +70,18 @@ func (c *learnFSClient) GetAttr(ctx context.Context, in *GetAttrRequest, opts ..
 	return out, nil
 }
 
-func (c *learnFSClient) SetAttr(ctx context.Context, in *SetAttrRequest, opts ...grpc.CallOption) (*SetAttrResponse, error) {
-	out := new(SetAttrResponse)
-	err := c.cc.Invoke(ctx, "/learnfs.LearnFS/SetAttr", in, out, opts...)
+func (c *learnFSClient) Lookup(ctx context.Context, in *LookupRequest, opts ...grpc.CallOption) (*LookupResponse, error) {
+	out := new(LookupResponse)
+	err := c.cc.Invoke(ctx, "/learnfs.LearnFS/Lookup", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *learnFSClient) Lookup(ctx context.Context, in *LookupRequest, opts ...grpc.CallOption) (*LookupResponse, error) {
-	out := new(LookupResponse)
-	err := c.cc.Invoke(ctx, "/learnfs.LearnFS/Lookup", in, out, opts...)
+func (c *learnFSClient) Mkdir(ctx context.Context, in *MkdirRequest, opts ...grpc.CallOption) (*MkdirResponse, error) {
+	out := new(MkdirResponse)
+	err := c.cc.Invoke(ctx, "/learnfs.LearnFS/Mkdir", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -145,6 +146,15 @@ func (c *learnFSClient) RemoveFile(ctx context.Context, in *RemoveFileRequest, o
 	return out, nil
 }
 
+func (c *learnFSClient) SetAttr(ctx context.Context, in *SetAttrRequest, opts ...grpc.CallOption) (*SetAttrResponse, error) {
+	out := new(SetAttrResponse)
+	err := c.cc.Invoke(ctx, "/learnfs.LearnFS/SetAttr", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *learnFSClient) Write(ctx context.Context, in *WriteRequest, opts ...grpc.CallOption) (*WriteResponse, error) {
 	out := new(WriteResponse)
 	err := c.cc.Invoke(ctx, "/learnfs.LearnFS/Write", in, out, opts...)
@@ -161,12 +171,13 @@ type LearnFSServer interface {
 	CreateFile(context.Context, *CreateFileRequest) (*CreateFileResponse, error)
 	Flush(context.Context, *FlushRequest) (*FlushResponse, error)
 	GetAttr(context.Context, *GetAttrRequest) (*GetAttrResponse, error)
-	SetAttr(context.Context, *SetAttrRequest) (*SetAttrResponse, error)
 	Lookup(context.Context, *LookupRequest) (*LookupResponse, error)
+	Mkdir(context.Context, *MkdirRequest) (*MkdirResponse, error)
 	OpenDir(LearnFS_OpenDirServer) error
 	OpenFile(context.Context, *OpenFileRequest) (*OpenFileResponse, error)
 	Read(context.Context, *ReadRequest) (*ReadResponse, error)
 	RemoveFile(context.Context, *RemoveFileRequest) (*RemoveFileResponse, error)
+	SetAttr(context.Context, *SetAttrRequest) (*SetAttrResponse, error)
 	Write(context.Context, *WriteRequest) (*WriteResponse, error)
 	mustEmbedUnimplementedLearnFSServer()
 }
@@ -184,11 +195,11 @@ func (UnimplementedLearnFSServer) Flush(context.Context, *FlushRequest) (*FlushR
 func (UnimplementedLearnFSServer) GetAttr(context.Context, *GetAttrRequest) (*GetAttrResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetAttr not implemented")
 }
-func (UnimplementedLearnFSServer) SetAttr(context.Context, *SetAttrRequest) (*SetAttrResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SetAttr not implemented")
-}
 func (UnimplementedLearnFSServer) Lookup(context.Context, *LookupRequest) (*LookupResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Lookup not implemented")
+}
+func (UnimplementedLearnFSServer) Mkdir(context.Context, *MkdirRequest) (*MkdirResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Mkdir not implemented")
 }
 func (UnimplementedLearnFSServer) OpenDir(LearnFS_OpenDirServer) error {
 	return status.Errorf(codes.Unimplemented, "method OpenDir not implemented")
@@ -201,6 +212,9 @@ func (UnimplementedLearnFSServer) Read(context.Context, *ReadRequest) (*ReadResp
 }
 func (UnimplementedLearnFSServer) RemoveFile(context.Context, *RemoveFileRequest) (*RemoveFileResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RemoveFile not implemented")
+}
+func (UnimplementedLearnFSServer) SetAttr(context.Context, *SetAttrRequest) (*SetAttrResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetAttr not implemented")
 }
 func (UnimplementedLearnFSServer) Write(context.Context, *WriteRequest) (*WriteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Write not implemented")
@@ -272,24 +286,6 @@ func _LearnFS_GetAttr_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
-func _LearnFS_SetAttr_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SetAttrRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(LearnFSServer).SetAttr(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/learnfs.LearnFS/SetAttr",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LearnFSServer).SetAttr(ctx, req.(*SetAttrRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _LearnFS_Lookup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(LookupRequest)
 	if err := dec(in); err != nil {
@@ -304,6 +300,24 @@ func _LearnFS_Lookup_Handler(srv interface{}, ctx context.Context, dec func(inte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(LearnFSServer).Lookup(ctx, req.(*LookupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _LearnFS_Mkdir_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MkdirRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LearnFSServer).Mkdir(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/learnfs.LearnFS/Mkdir",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LearnFSServer).Mkdir(ctx, req.(*MkdirRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -388,6 +402,24 @@ func _LearnFS_RemoveFile_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LearnFS_SetAttr_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetAttrRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LearnFSServer).SetAttr(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/learnfs.LearnFS/SetAttr",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LearnFSServer).SetAttr(ctx, req.(*SetAttrRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _LearnFS_Write_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(WriteRequest)
 	if err := dec(in); err != nil {
@@ -426,12 +458,12 @@ var LearnFS_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _LearnFS_GetAttr_Handler,
 		},
 		{
-			MethodName: "SetAttr",
-			Handler:    _LearnFS_SetAttr_Handler,
-		},
-		{
 			MethodName: "Lookup",
 			Handler:    _LearnFS_Lookup_Handler,
+		},
+		{
+			MethodName: "Mkdir",
+			Handler:    _LearnFS_Mkdir_Handler,
 		},
 		{
 			MethodName: "OpenFile",
@@ -444,6 +476,10 @@ var LearnFS_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RemoveFile",
 			Handler:    _LearnFS_RemoveFile_Handler,
+		},
+		{
+			MethodName: "SetAttr",
+			Handler:    _LearnFS_SetAttr_Handler,
 		},
 		{
 			MethodName: "Write",

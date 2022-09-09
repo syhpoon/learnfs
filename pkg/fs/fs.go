@@ -236,6 +236,52 @@ func (fs *Filesystem) RemoveFile(dirInodePtr InodePtr, name string) error {
 	return nil
 }
 
+func (fs *Filesystem) CreateDirectory(
+	dirInodePtr InodePtr,
+	name string,
+	mode uint32,
+	umask uint32,
+	uid uint32,
+	gid uint32) (*Inode, error) {
+
+	// Get the dir by the inode ptr
+	dir, err := fs.dirCache.getDir(dirInodePtr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get dir for inode %d: %w", dirInodePtr, err)
+	}
+
+	ino, err := fs.inodeAllocator.AllocateInode()
+	if err != nil {
+		return nil, fmt.Errorf("failed to allocate inode: %w", err)
+	}
+
+	ino.Mode = mode
+	ino.Uid = uid
+	ino.Gid = gid
+
+	blk, err := fs.blockAllocator.AllocateBlock()
+	if err != nil {
+		return nil, fmt.Errorf("failed to allocate block: %w", err)
+	}
+
+	if err := ino.AddBlockPtr(blk.ptr); err != nil {
+		return nil, fmt.Errorf("failed to add block to inode: %w", err)
+	}
+
+	if err := dir.AddEntry(name, ino.ptr); err != nil {
+		return nil, fmt.Errorf("failed to add directory entry: %w", err)
+	}
+
+	ino.Nlink = 1
+	ino.SetDirty(true)
+	fs.inodeCache.AddInode(ino)
+
+	blk.setDirty(true)
+	fs.blockCache.addBlock(blk)
+
+	return ino, nil
+}
+
 func (fs *Filesystem) GetInode(ptr InodePtr) (*Inode, error) {
 	return fs.inodeCache.GetInode(ptr)
 }
