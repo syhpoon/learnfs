@@ -350,31 +350,50 @@ func (fs *Filesystem) Write(ptr InodePtr, offset int64, data []byte) (int, error
 	inode.Lock()
 	defer inode.Unlock()
 
-	blockIdx, blockOffset := fs.blockOffset(offset)
-
+	origOffset := offset
 	var blk *block
+	var blockIdx, blockOffset int64
+	var s, e int
 
-	// Need to allocate a new block
-	if inode.Blocks[blockIdx] == 0 {
-		blk, err = fs.blockAllocator.AllocateBlock()
-		if err != nil {
-			return 0, fmt.Errorf("failed to allocate a new block: %w", err)
+	// `data` can be larger than a block size, so we need to split it up
+	// and write slices into corresponding blocks
+	for e < len(data) {
+		blockIdx, blockOffset = fs.blockOffset(offset)
+
+		// Need to allocate a new block
+		if inode.Blocks[blockIdx] == 0 {
+			blk, err = fs.blockAllocator.AllocateBlock()
+			if err != nil {
+				return 0, fmt.Errorf("failed to allocate a new block: %w", err)
+			}
+
+			inode.Blocks[blockIdx] = blk.ptr
+		} else {
+			blk, err = fs.blockCache.getBlock(inode.Blocks[blockIdx])
+			if err != nil {
+				return 0, fmt.Errorf("failed to get block %d: %w", inode.Blocks[blockIdx], err)
+			}
 		}
 
-		inode.Blocks[blockIdx] = blk.ptr
-	} else {
-		blk, err = fs.blockCache.getBlock(inode.Blocks[blockIdx])
-		if err != nil {
-			return 0, fmt.Errorf("failed to get block %d: %w", inode.Blocks[blockIdx], err)
+		sliceSize := int(int64(fs.blockSize) - blockOffset)
+		e += sliceSize
+		if e > len(data) {
+			e = len(data)
 		}
+
+		fmt.Printf("## WRITE block-idx=%v, block-offset=%v, s=%v, e=%v\n", blockIdx, blockOffset, s, e)
+		blk.write(int(blockOffset), data[s:e])
+		s += sliceSize
+		offset += int64(sliceSize)
 	}
 
-	// TODO: need to handle the case where data spans the block boundary
-	blk.write(int(blockOffset), data)
+	/*
+		size := len(data)
+		start := blockIdx*int64(fs.blockSize) + blockOffset
+		newLen := start + int64(size)
+	*/
 
-	size := len(data)
-	start := blockIdx*int64(fs.blockSize) + blockOffset
-	newLen := start + int64(size)
+	newLen := origOffset + int64(len(data))
 
 	if newLen > int64(inode.Size) {
 		inode.Size = uint32(newLen)

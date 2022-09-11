@@ -33,15 +33,16 @@ func (ses *Session) create(ctx context.Context, req *fuse.CreateRequest) {
 		return
 	}
 
+	inode := fuse.NodeID(resp.Attr.Ino)
+
 	lookup := fuse.LookupResponse{
-		Node:       fuse.NodeID(resp.Attr.Ino),
+		Node:       inode,
 		Attr:       ses.attr(resp.Attr),
 		EntryValid: 1 * time.Minute,
 	}
 
 	open := fuse.OpenResponse{
-		// TODO
-		Handle: fuse.HandleID(10),
+		Handle: ses.newFileHandle(inode),
 		Flags:  fuse.OpenKeepCache,
 	}
 

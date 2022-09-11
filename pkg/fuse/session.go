@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -220,4 +221,14 @@ func (ses *Session) fromGoFileMode(fileMode os.FileMode) uint32 {
 	}
 
 	return mode
+}
+
+func (ses *Session) newFileHandle(inode fuse.NodeID) fuse.HandleID {
+	handle := atomic.AddUint64(&ses.fileHandle, 1)
+
+	ses.Lock()
+	ses.fileHandles[handle] = &fileHandle{inode: inode}
+	ses.Unlock()
+
+	return fuse.HandleID(handle)
 }

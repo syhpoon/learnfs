@@ -353,7 +353,11 @@ func (s *Server) RemoveFile(
 func (s *Server) Write(
 	ctx context.Context, req *proto.WriteRequest) (*proto.WriteResponse, error) {
 
-	log.Debug().Interface("req", req).Msg("Write")
+	log.Debug().
+		Uint32("inode", req.Inode).
+		Int64("offset", req.Offset).
+		Int("data-len", len(req.Data)).
+		Msg("Write")
 
 	_, err := s.fs.GetInode(req.Inode)
 	if err != nil {

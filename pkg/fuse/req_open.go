@@ -59,14 +59,8 @@ func (ses *Session) open(ctx context.Context, req *fuse.OpenRequest) {
 			return
 		}
 
-		handle := atomic.AddUint64(&ses.fileHandle, 1)
-
-		ses.Lock()
-		ses.fileHandles[handle] = &fileHandle{inode: inode}
-		ses.Unlock()
-
 		req.Respond(&fuse.OpenResponse{
-			Handle: fuse.HandleID(handle),
+			Handle: ses.newFileHandle(inode),
 			Flags:  fuse.OpenKeepCache,
 		})
 	}
