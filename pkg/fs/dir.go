@@ -28,7 +28,7 @@ func NewDirectory(inode *Inode, cache *blockCache, pool *bufPool, blockSize uint
 	entries := make(map[BlockPtr][]*DirEntry)
 
 	// For every inode block create a slice of nil dir entries to represent
-	for _, blkPtr := range inode.GetBlockPtrs() {
+	for _, blkPtr := range inode.getBlockPtrs() {
 		entries[blkPtr] = make([]*DirEntry, blockSize/DIR_ENTRY_SIZE)
 	}
 
@@ -50,7 +50,7 @@ func LoadDirectory(inode *Inode, cache *blockCache,
 	dir := NewDirectory(inode, cache, pool, blockSize)
 
 	// For every block load the corresponding dir entries
-	for _, blkPtr := range inode.GetBlockPtrs() {
+	for _, blkPtr := range inode.getBlockPtrs() {
 		blk, err := cache.getBlock(blkPtr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load block %d: %w", blkPtr, err)
@@ -109,7 +109,7 @@ func (dir *Directory) AddEntry(name string, inodePtr InodePtr) error {
 
 	dir.name2inode[name] = inodePtr
 
-	for _, blkPtr := range dir.inode.GetBlockPtrs() {
+	for _, blkPtr := range dir.inode.getBlockPtrs() {
 		// Find the first empty slot
 		for i := range dir.entries[blkPtr] {
 			if dir.entries[blkPtr][i] == nil {
@@ -149,7 +149,7 @@ func (dir *Directory) flush(dev device.Device, sb *Superblock) error {
 	}
 
 	var entries []any
-	for _, blkPtr := range dir.inode.GetBlockPtrs() {
+	for _, blkPtr := range dir.inode.getBlockPtrs() {
 		for _, e := range dir.entries[blkPtr] {
 			entry := e
 			if entry == nil {

@@ -7,7 +7,7 @@ import (
 	"io"
 )
 
-var byteOrder = binary.LittleEndian
+var binEncoding = binary.LittleEndian
 
 type Encoder interface {
 	EncodeTo(io.Writer) error
@@ -19,7 +19,7 @@ type Decoder interface {
 
 func encodeFields(w io.Writer, fields []any) error {
 	for i := range fields {
-		if err := binary.Write(w, byteOrder, fields[i]); err != nil {
+		if err := binary.Write(w, binEncoding, fields[i]); err != nil {
 			return err
 		}
 	}
@@ -29,7 +29,7 @@ func encodeFields(w io.Writer, fields []any) error {
 
 func decodeFields(r io.Reader, fields []any) error {
 	for i := range fields {
-		if err := binary.Read(r, byteOrder, fields[i]); err != nil {
+		if err := binary.Read(r, binEncoding, fields[i]); err != nil {
 			return err
 		}
 	}

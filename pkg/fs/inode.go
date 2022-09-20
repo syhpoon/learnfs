@@ -38,9 +38,6 @@ type Inode struct {
 	// Status change time
 	Ctime int64
 
-	// Direct block pointers
-	Blocks [DIRECT_BLOCKS_NUM]BlockPtr
-
 	// Single indirect block pointers
 	IndirectBlock BlockPtr
 
@@ -53,11 +50,17 @@ type Inode struct {
 	// Dirty flag indicates if inode has been modified
 	dirty int32
 
+	// a linear list of all the inode blocks, direct and indirect
+	blocks []BlockPtr
+
 	sync.RWMutex
 }
 
 func newInodeFromBuf(ptr InodePtr, buf Buf) (*Inode, error) {
-	ino := &Inode{ptr: ptr}
+	ino := &Inode{
+		ptr:    ptr,
+		blocks: make([]BlockPtr, DIRECT_BLOCKS_NUM),
+	}
 
 	err := ino.DecodeFrom(bytes.NewReader(buf))
 	if err != nil {
@@ -79,11 +82,11 @@ func newInode(ptr InodePtr) *Inode {
 		Atime:               ts,
 		Mtime:               ts,
 		Ctime:               ts,
-		Blocks:              [21]BlockPtr{},
 		IndirectBlock:       0,
 		DoubleIndirectBlock: 0,
 		ptr:                 ptr,
 		dirty:               0,
+		blocks:              make([]BlockPtr, DIRECT_BLOCKS_NUM),
 	}
 }
 
@@ -91,10 +94,18 @@ func (ino *Inode) Ptr() InodePtr {
 	return ino.ptr
 }
 
-func (ino *Inode) GetBlockPtrs() []BlockPtr {
+func (ino *Inode) getBlockPtrs() []BlockPtr {
+	ino.RLock()
+	blocks := ino.getBlockPtrsNoLock()
+	ino.RUnlock()
+
+	return blocks
+}
+
+func (ino *Inode) getBlockPtrsNoLock() []BlockPtr {
 	var blocks []BlockPtr
 
-	for _, ptr := range ino.Blocks {
+	for _, ptr := range ino.blocks {
 		if ptr != 0 {
 			blocks = append(blocks, ptr)
 		}
@@ -104,15 +115,18 @@ func (ino *Inode) GetBlockPtrs() []BlockPtr {
 }
 
 func (ino *Inode) AddBlockPtr(newPtr BlockPtr) error {
-	for i, ptr := range ino.Blocks {
+	ino.Lock()
+	defer ino.Unlock()
+
+	for i, ptr := range ino.blocks {
 		if ptr == 0 {
-			ino.Blocks[i] = newPtr
+			ino.blocks[i] = newPtr
 
 			return nil
 		}
 	}
 
-	return fmt.Errorf("all inode blocks are taken")
+	return fmt.Errorf("TODO: all inode blocks are taken")
 }
 
 func (ino *Inode) SetDirty(dirty bool) {
@@ -138,7 +152,7 @@ func (ino *Inode) EncodeTo(w io.Writer) error {
 		ino.Atime,
 		ino.Mtime,
 		ino.Ctime,
-		ino.Blocks,
+		ino.blocks[:DIRECT_BLOCKS_NUM],
 		ino.IndirectBlock,
 		ino.DoubleIndirectBlock,
 	}
@@ -156,7 +170,7 @@ func (ino *Inode) DecodeFrom(r io.Reader) error {
 		&ino.Atime,
 		&ino.Mtime,
 		&ino.Ctime,
-		&ino.Blocks,
+		&ino.blocks,
 		&ino.IndirectBlock,
 		&ino.DoubleIndirectBlock,
 	}

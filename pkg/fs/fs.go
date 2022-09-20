@@ -158,254 +158,6 @@ func (fs *Filesystem) RunFlusher(ctx context.Context, wg *sync.WaitGroup) {
 	fs.flusher.run(ctx, wg)
 }
 
-func (fs *Filesystem) CreateFile(
-	dirInodePtr InodePtr,
-	name string,
-	mode uint32,
-	umask uint32,
-	uid uint32,
-	gid uint32) (*Inode, error) {
-	// Get the dir by the inode ptr
-	dir, err := fs.dirCache.getDir(dirInodePtr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get dir for inode %d: %w", dirInodePtr, err)
-	}
-
-	// Allocate a new inode
-	ino, err := fs.inodeAllocator.AllocateInode()
-	if err != nil {
-		return nil, fmt.Errorf("failed to allocate inode: %w", err)
-	}
-
-	ino.Mode = syscall.S_IFREG | mode
-	ino.Uid = uid
-	ino.Gid = gid
-	ino.Nlink = 1
-
-	if err := dir.AddEntry(name, ino.Ptr()); err != nil {
-		return nil, fmt.Errorf("failed to add directory entry: %w", err)
-	}
-
-	ino.SetDirty(true)
-	fs.inodeCache.AddInode(ino)
-
-	return ino, nil
-}
-
-func (fs *Filesystem) RemoveFile(dirInodePtr InodePtr, name string) error {
-	dir, err := fs.dirCache.getDir(dirInodePtr)
-	if err != nil {
-		return fmt.Errorf("failed to get dir for inode %d: %w", dirInodePtr, err)
-	}
-
-	inodePtr, err := dir.GetEntry(name)
-	if err != nil {
-		return fmt.Errorf("failed to get entry %s: %w", name, err)
-	}
-
-	inode, err := fs.GetInode(inodePtr)
-	if err != nil {
-		return fmt.Errorf("failed to get inode %d: %w", inodePtr, err)
-	}
-
-	inode.Lock()
-	defer inode.Unlock()
-
-	inode.Nlink--
-
-	// Need to remove the file
-	if inode.Nlink <= 0 {
-		// Deallocate all the data blocks
-		for _, blkPtr := range inode.GetBlockPtrs() {
-			if err := fs.blockAllocator.DeallocateBlock(blkPtr); err != nil {
-				return fmt.Errorf("failed to deallocate block %d: %w", blkPtr, err)
-			}
-		}
-
-		if err := dir.DeleteEntry(name); err != nil {
-			return fmt.Errorf("failed to delete directory entry: %w", err)
-		}
-
-		if err := fs.inodeAllocator.DeallocateInode(inode.ptr); err != nil {
-			return fmt.Errorf("failed to deallocate inode %d: %w", inode.ptr, err)
-		}
-
-		fs.inodeCache.DeleteInode(inodePtr)
-	}
-
-	return nil
-}
-
-func (fs *Filesystem) CreateDirectory(
-	dirInodePtr InodePtr,
-	name string,
-	mode uint32,
-	umask uint32,
-	uid uint32,
-	gid uint32) (*Inode, error) {
-
-	// Get the dir by the inode ptr
-	dir, err := fs.dirCache.getDir(dirInodePtr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get dir for inode %d: %w", dirInodePtr, err)
-	}
-
-	ino, err := fs.inodeAllocator.AllocateInode()
-	if err != nil {
-		return nil, fmt.Errorf("failed to allocate inode: %w", err)
-	}
-
-	ino.Mode = mode
-	ino.Uid = uid
-	ino.Gid = gid
-
-	blk, err := fs.blockAllocator.AllocateBlock()
-	if err != nil {
-		return nil, fmt.Errorf("failed to allocate block: %w", err)
-	}
-
-	if err := ino.AddBlockPtr(blk.ptr); err != nil {
-		return nil, fmt.Errorf("failed to add block to inode: %w", err)
-	}
-
-	if err := dir.AddEntry(name, ino.ptr); err != nil {
-		return nil, fmt.Errorf("failed to add directory entry: %w", err)
-	}
-
-	ino.Nlink = 1
-	ino.SetDirty(true)
-	fs.inodeCache.AddInode(ino)
-
-	blk.setDirty(true)
-	fs.blockCache.addBlock(blk)
-
-	return ino, nil
-}
-
-func (fs *Filesystem) GetInode(ptr InodePtr) (*Inode, error) {
-	return fs.inodeCache.GetInode(ptr)
-}
-
-func (fs *Filesystem) GetDir(ptr InodePtr) (*Directory, error) {
-	return fs.dirCache.getDir(ptr)
-}
-
-func (fs *Filesystem) Flush(ptr InodePtr) error {
-	return fs.flusher.flushInode(ptr)
-}
-
-func (fs *Filesystem) Lookup(ptr InodePtr, name string) (*Inode, error) {
-	dir, err := fs.dirCache.getDir(ptr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get directory %d: %w", ptr, err)
-	}
-
-	entryPtr, err := dir.GetEntry(name)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get dir entry %s: %w", name, err)
-	}
-
-	inode, err := fs.inodeCache.GetInode(entryPtr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get dir entry inode %d: %w", entryPtr, err)
-	}
-
-	return inode, nil
-}
-
-func (fs *Filesystem) Read(ptr InodePtr, offset int64, size int) ([]byte, error) {
-	inode, err := fs.inodeCache.GetInode(ptr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get inode %d: %w", ptr, err)
-	}
-
-	inode.RLock()
-	defer inode.RUnlock()
-
-	blockIdx, blockOffset := fs.blockOffset(offset)
-
-	if inode.Blocks[blockIdx] == 0 {
-		return nil, nil
-	} else {
-		start := blockIdx*int64(fs.blockSize) + blockOffset
-		if start+int64(size) > int64(inode.Size) {
-			size = int(int64(inode.Size) - offset)
-		}
-
-		blk, err := fs.blockCache.getBlock(inode.Blocks[blockIdx])
-		if err != nil {
-			return nil, fmt.Errorf("failed to get block %d: %w", inode.Blocks[blockIdx], err)
-		}
-
-		return blk.read(int(blockOffset), size), nil
-	}
-}
-
-func (fs *Filesystem) Write(ptr InodePtr, offset int64, data []byte) (int, error) {
-	inode, err := fs.inodeCache.GetInode(ptr)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get inode %d: %w", ptr, err)
-	}
-
-	inode.Lock()
-	defer inode.Unlock()
-
-	origOffset := offset
-	var blk *block
-	var blockIdx, blockOffset int64
-	var s, e int
-
-	// `data` can be larger than a block size, so we need to split it up
-	// and write slices into corresponding blocks
-	for e < len(data) {
-		blockIdx, blockOffset = fs.blockOffset(offset)
-
-		// Need to allocate a new block
-		if inode.Blocks[blockIdx] == 0 {
-			blk, err = fs.blockAllocator.AllocateBlock()
-			if err != nil {
-				return 0, fmt.Errorf("failed to allocate a new block: %w", err)
-			}
-
-			inode.Blocks[blockIdx] = blk.ptr
-		} else {
-			blk, err = fs.blockCache.getBlock(inode.Blocks[blockIdx])
-			if err != nil {
-				return 0, fmt.Errorf("failed to get block %d: %w", inode.Blocks[blockIdx], err)
-			}
-		}
-
-		sliceSize := int(int64(fs.blockSize) - blockOffset)
-		e += sliceSize
-		if e > len(data) {
-			e = len(data)
-		}
-
-		fmt.Printf("## WRITE block-idx=%v, block-offset=%v, s=%v, e=%v\n", blockIdx, blockOffset, s, e)
-		blk.write(int(blockOffset), data[s:e])
-		s += sliceSize
-		offset += int64(sliceSize)
-	}
-
-	/*
-		size := len(data)
-		start := blockIdx*int64(fs.blockSize) + blockOffset
-		newLen := start + int64(size)
-	*/
-
-	newLen := origOffset + int64(len(data))
-
-	if newLen > int64(inode.Size) {
-		inode.Size = uint32(newLen)
-	}
-
-	blk.setDirty(true)
-	inode.SetDirty(true)
-	fs.blockCache.addBlock(blk)
-
-	return len(data), nil
-}
-
 func (fs *Filesystem) Shutdown() error {
 	return fs.dev.Close()
 }
@@ -491,4 +243,92 @@ func (fs *Filesystem) blockOffset(offset int64) (int64, int64) {
 	blockOffset := offset % int64(fs.blockSize)
 
 	return blockIdx, blockOffset
+}
+
+func (fs *Filesystem) getInodeBlock(ino *Inode, idx int64) (BlockPtr, error) {
+	if err := fs.prepareInodeBlock(ino, idx); err != nil {
+		return 0, fmt.Errorf("failed to prepare inode block: %w", err)
+	}
+
+	return ino.blocks[idx], nil
+}
+
+func (fs *Filesystem) setInodeBlock(ino *Inode, idx int64, ptr BlockPtr) error {
+	if err := fs.prepareInodeBlock(ino, idx); err != nil {
+		return fmt.Errorf("failed to prepare inode block: %w", err)
+	}
+
+	if idx >= DIRECT_BLOCKS_NUM {
+		blk, err := fs.blockCache.getBlock(ino.IndirectBlock)
+		if err != nil {
+			return fmt.Errorf("failed to get indirect block %d for inode %d: %w",
+				ino.IndirectBlock, ino.ptr, err)
+		}
+
+		s := (idx - DIRECT_BLOCKS_NUM) * BlockPtrSize
+
+		blk.Lock()
+		binEncoding.PutUint32(blk.data[s:s+BlockPtrSize], ptr)
+		blk.Unlock()
+		blk.setDirty(true)
+	}
+
+	ino.blocks[idx] = ptr
+	ino.SetDirty(true)
+
+	return nil
+}
+
+func (fs *Filesystem) prepareInodeBlock(ino *Inode, idx int64) error {
+	// Direct block
+	if idx < DIRECT_BLOCKS_NUM {
+		return nil
+	}
+
+	ptrsPerPage := int64(fs.blockSize) / BlockPtrSize
+
+	// Number of single indirect pointers
+	maxBlocks := int64(DIRECT_BLOCKS_NUM) + ptrsPerPage
+
+	if idx < maxBlocks {
+		// Need to load the appropriate indirect blocks first
+		if int64(len(ino.blocks)) <= idx {
+			// Need to allocate the single indirect block pointer
+			if ino.IndirectBlock == 0 {
+				blk, err := fs.blockAllocator.AllocateBlock()
+				if err != nil {
+					return fmt.Errorf(
+						"failed to allocate indirect block for inode %d: %w", ino.ptr, err)
+				}
+
+				fs.blockCache.addBlock(blk)
+
+				// Since it's a newly allocated indirect block, all the pointer are
+				// unused (0) at this point
+				ino.blocks = append(ino.blocks, make([]BlockPtr, ptrsPerPage)...)
+				ino.IndirectBlock = blk.ptr
+			} else {
+				// Load block pointers
+				blk, err := fs.blockCache.getBlock(ino.IndirectBlock)
+				if err != nil {
+					return fmt.Errorf(
+						"failed to load indirect block %d for inode %d: %w",
+						ino.IndirectBlock, ino.ptr, err)
+				}
+
+				blocks := make([]BlockPtr, ptrsPerPage)
+
+				for i := range blocks {
+					s := int64(i) * BlockPtrSize
+					blocks[i] = binEncoding.Uint32(blk.data[s : s+BlockPtrSize])
+				}
+
+				ino.blocks = append(ino.blocks, blocks...)
+			}
+
+			ino.SetDirty(true)
+		}
+	}
+
+	return nil
 }

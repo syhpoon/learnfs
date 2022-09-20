@@ -109,7 +109,7 @@ func (f *flusher) doFlushInode(inode *Inode) error {
 			Offset: f.sb.InodeOffset(inode.Ptr()),
 		})
 
-		for _, blockPtr := range inode.GetBlockPtrs() {
+		for _, blockPtr := range inode.getBlockPtrs() {
 			if block := f.blockCache.getBlockNoFetch(blockPtr); block != nil && block.isDirty() {
 				ops = append(ops, &device.Op{
 					Buf:    block.data,

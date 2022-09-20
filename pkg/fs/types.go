@@ -2,6 +2,10 @@
 
 package fs
 
+import (
+	"unsafe"
+)
+
 // block pointer
 type BlockPtr = uint32
 
@@ -10,3 +14,7 @@ type InodePtr = uint32
 
 // Common buffer
 type Buf = []byte
+
+const (
+	BlockPtrSize = int64(unsafe.Sizeof(BlockPtr(0)))
+)

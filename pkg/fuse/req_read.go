@@ -80,8 +80,9 @@ func (ses *Session) read(ctx context.Context, req *fuse.ReadRequest) {
 		}
 
 		resp, err := ses.cl.Read(ctx, &proto.ReadRequest{
-			Inode: uint32(h.inode),
-			Size:  int32(req.Size),
+			Inode:  uint32(h.inode),
+			Size:   int32(req.Size),
+			Offset: req.Offset,
 		})
 
 		if err != nil {
