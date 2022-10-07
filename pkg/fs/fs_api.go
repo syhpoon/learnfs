@@ -7,6 +7,15 @@ import (
 	"syscall"
 )
 
+type Stats struct {
+	TotalBlocks       uint64
+	FreeBlocks        uint64
+	TotalInodes       uint64
+	FreeInodes        uint64
+	BlockSize         uint32
+	MaxFileNameLength uint32
+}
+
 func (fs *Filesystem) CreateFile(
 	dirInodePtr InodePtr,
 	name string,
@@ -208,10 +217,24 @@ func (fs *Filesystem) Read(ptr InodePtr, offset int64, size int) ([]byte, error)
 			done = true
 		}
 
-		buf = append(buf, blk.read(int(blockOffset), readSize)...)
+		chunk := blk.read(int(blockOffset), readSize)
+		buf = append(buf, chunk...)
+
+		offset += int64(len(chunk))
 	}
 
 	return buf, nil
+}
+
+func (fs *Filesystem) StatFs() *Stats {
+	return &Stats{
+		TotalBlocks:       uint64(fs.superblock.NumDataBlocks),
+		FreeBlocks:        uint64(fs.blockAllocator.GetBitmap().numFreeBits()),
+		TotalInodes:       uint64(fs.superblock.NumInodes),
+		FreeInodes:        uint64(fs.inodeAllocator.GetBitmap().numFreeBits()),
+		BlockSize:         fs.superblock.BlockSize,
+		MaxFileNameLength: MAX_FILE_NAME,
+	}
 }
 
 func (fs *Filesystem) Write(ptr InodePtr, offset int64, data []byte) (int, error) {

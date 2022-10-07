@@ -12,6 +12,9 @@ proto:
 test:
 	go test -v ./...
 
+fuzz:
+	cd pkg/fs && go test -v -fuzz=. -fuzztime 1m
+
 vuln:
 	govulncheck ./...
 

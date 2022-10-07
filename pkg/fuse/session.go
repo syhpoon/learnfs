@@ -103,6 +103,8 @@ func (ses *Session) Start(ctx context.Context) {
 			ses.remove(ctx, r)
 		case *fuse.SetattrRequest:
 			ses.setAttr(ctx, r)
+		case *fuse.StatfsRequest:
+			ses.statfs(ctx, r)
 		case *fuse.WriteRequest:
 			ses.write(ctx, r)
 		default:

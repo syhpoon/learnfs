@@ -61,3 +61,16 @@ func (bm *bitmap) convert(bit uint32) (uint32, uint8) {
 
 	return idx, uint8(off)
 }
+
+// Return the number of free bits
+func (bm *bitmap) numFreeBits() uint32 {
+	count := uint32(0)
+
+	for i := uint32(0); i <= bm.maxBit; i++ {
+		if !bm.isSet(i) {
+			count++
+		}
+	}
+
+	return count
+}

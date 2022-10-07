@@ -350,6 +350,25 @@ func (s *Server) RemoveFile(
 	return &proto.RemoveFileResponse{}, nil
 }
 
+func (s *Server) Statfs(
+	ctx context.Context, req *proto.StatfsRequest) (*proto.StatfsResponse, error) {
+
+	log.Debug().Interface("req", req).Msg("Statfs")
+
+	stat := s.fs.StatFs()
+
+	resp := &proto.StatfsResponse{
+		TotalBlocks:       stat.TotalBlocks,
+		FreeBlocks:        stat.FreeBlocks,
+		TotalInodes:       stat.TotalInodes,
+		FreeInodes:        stat.FreeInodes,
+		BlockSize:         stat.BlockSize,
+		MaxFileNameLength: stat.MaxFileNameLength,
+	}
+
+	return resp, nil
+}
+
 func (s *Server) Write(
 	ctx context.Context, req *proto.WriteRequest) (*proto.WriteResponse, error) {
 

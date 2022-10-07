@@ -16,6 +16,7 @@ service LearnFS {
     rpc Read (ReadRequest) returns (ReadResponse);
     rpc RemoveFile (RemoveFileRequest) returns (RemoveFileResponse);
     rpc SetAttr (SetAttrRequest) returns (SetAttrResponse);
+    rpc Statfs (StatfsRequest) returns (StatfsResponse);
     rpc Write (WriteRequest) returns (WriteResponse);
 }
 
@@ -180,4 +181,22 @@ message MkdirRequest {
 message MkdirResponse {
     uint32 errno = 1;
     Attr attr = 2;
+}
+
+message StatfsRequest {
+}
+
+message StatfsResponse {
+    // Total data blocks in file system.
+    uint64 total_blocks = 1;
+    // Free blocks in file system.
+    uint64 free_blocks = 2;
+    // Total inodes in file system.
+    uint64 total_inodes = 4;
+    // Free inodes in file system.
+    uint64 free_inodes = 5;
+    // Block size
+    uint32 block_size = 6;
+    // Maximum file name length
+    uint32 max_file_name_length = 7;
 }
