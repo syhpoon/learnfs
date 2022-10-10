@@ -99,7 +99,7 @@ func (dir *Directory) AddEntry(name string, inodePtr InodePtr) error {
 	defer dir.Unlock()
 
 	if _, ok := dir.name2inode[name]; ok {
-		return ErrorAlreadyExists
+		return ErrorExists
 	}
 
 	entry, err := NewDirEntry(inodePtr, name)

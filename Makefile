@@ -20,5 +20,5 @@ vuln:
 
 dev:
 	rm -f dev.test
-	fallocate -l 10m dev.test
+	fallocate -l 100m dev.test
 	./learnfs mkfs dev.test

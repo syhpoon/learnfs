@@ -94,6 +94,67 @@ func (fs *Filesystem) RemoveFile(dirInodePtr InodePtr, name string) error {
 	return nil
 }
 
+func (fs *Filesystem) RemoveDirectory(parentDirInodePtr InodePtr, name string) error {
+	parentDir, err := fs.dirCache.getDir(parentDirInodePtr)
+	if err != nil {
+		return fmt.Errorf("failed to get dir for inode %d: %w", parentDirInodePtr, err)
+	}
+
+	inodePtr, err := parentDir.GetEntry(name)
+	if err != nil {
+		return fmt.Errorf("failed to get entry %s: %w", name, err)
+	}
+
+	inode, err := fs.GetInode(inodePtr)
+	if err != nil {
+		return fmt.Errorf("failed to get inode %d: %w", inodePtr, err)
+	}
+
+	inode.Lock()
+	defer inode.Unlock()
+
+	if inode.Type() != syscall.S_IFDIR {
+		return &ErrorSystem{Errno: syscall.ENOTDIR}
+	}
+
+	dir, err := fs.dirCache.getDir(inodePtr)
+	if err != nil {
+		return fmt.Errorf("failed to get dir for inode %d: %w", inodePtr, err)
+	}
+
+	dir.Lock()
+	defer dir.Unlock()
+
+	if len(dir.name2inode) > 0 {
+		return &ErrorSystem{Errno: syscall.ENOTEMPTY}
+	}
+
+	inode.Nlink--
+
+	// Need to remove the dir
+	if inode.Nlink <= 0 {
+		// Deallocate all the data blocks
+		for _, blkPtr := range inode.getBlockPtrsNoLock() {
+			if err := fs.blockAllocator.DeallocateBlock(blkPtr); err != nil {
+				return fmt.Errorf("failed to deallocate block %d: %w", blkPtr, err)
+			}
+		}
+
+		if err := parentDir.DeleteEntry(name); err != nil {
+			return fmt.Errorf("failed to delete directory entry: %w", err)
+		}
+
+		if err := fs.inodeAllocator.DeallocateInode(inode.ptr); err != nil {
+			return fmt.Errorf("failed to deallocate inode %d: %w", inode.ptr, err)
+		}
+
+		fs.inodeCache.DeleteInode(inodePtr)
+		fs.dirCache.deleteDir(inodePtr)
+	}
+
+	return nil
+}
+
 func (fs *Filesystem) CreateDirectory(
 	dirInodePtr InodePtr,
 	name string,

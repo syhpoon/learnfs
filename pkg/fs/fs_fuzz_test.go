@@ -6,12 +6,14 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/syhpoon/learnfs/pkg/device"
@@ -91,7 +93,8 @@ func fuzzTest(t *testing.T, seed int64, dirLevels uint) {
 			if ino, ok := inodeMap[partsStr]; ok {
 				ptr = ino
 			} else {
-				ino, err := fsObj.CreateDirectory(parentInode, part, 0x755, 0, uid, gid)
+				ino, err := fsObj.CreateDirectory(parentInode, part,
+					0x755|syscall.S_IFDIR, 0, uid, gid)
 				require.NoError(t, err, "should create directory '%s' (%s)",
 					part, strings.Join(parts, "/"))
 				ptr = ino.ptr
@@ -202,6 +205,35 @@ func fuzzTest(t *testing.T, seed int64, dirLevels uint) {
 
 		err := fsObj.RemoveFile(dirIno, f)
 		require.NoError(t, err, "must delete file %s from dir %s", f, dir)
+
+		ino, err := fsObj.Lookup(dirIno, f)
+		require.Nil(t, ino)
+		require.True(t, errors.Is(err, ErrorNotFound))
+	}
+
+	// Delete dirs
+	sort.Slice(state.dirs, func(i, j int) bool {
+		return state.dirs[i] > state.dirs[j]
+	})
+
+	for _, dir := range state.dirs {
+		parent, child := filepath.Split(dir)
+
+		if parent == "/" {
+			continue
+		}
+
+		parent = strings.Trim(parent, "/")
+
+		dirIno, ok := inodeMap[parent]
+		require.Truef(t, ok, "containing directory %s must exist", parent)
+
+		err := fsObj.RemoveDirectory(dirIno, child)
+		require.NoError(t, err, "must delete child dir %s from dir %s", child, parent)
+
+		ino, err := fsObj.Lookup(dirIno, child)
+		require.Nil(t, ino)
+		require.True(t, errors.Is(err, ErrorNotFound))
 	}
 }
 

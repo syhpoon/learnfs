@@ -18,7 +18,21 @@ func (ses *Session) remove(ctx context.Context, req *fuse.RemoveRequest) {
 	inode := uint32(req.Node)
 
 	if req.Dir {
-		// TODO
+		resp, err := ses.cl.RemoveDir(ctx, &proto.RemoveDirRequest{
+			DirInode: inode,
+			Name:     req.Name,
+		})
+
+		if err != nil {
+			log.Error().Str("dir", req.Name).Err(err).Msg("failed to remove dir")
+			req.RespondError(err)
+			return
+		}
+
+		if resp.Errno != 0 {
+			req.RespondError(syscall.Errno(resp.Errno))
+			return
+		}
 	} else {
 		resp, err := ses.cl.RemoveFile(ctx, &proto.RemoveFileRequest{
 			DirInode: inode,

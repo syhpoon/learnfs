@@ -330,5 +330,12 @@ func (fs *Filesystem) prepareInodeBlock(ino *Inode, idx int64) error {
 		}
 	}
 
+	// Number of double indirect pointers
+	maxBlocks += ptrsPerPage * ptrsPerPage
+
+	if idx < maxBlocks {
+
+	}
+
 	return nil
 }

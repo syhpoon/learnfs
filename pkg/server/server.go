@@ -77,10 +77,9 @@ func (s *Server) GetAttr(
 	log.Debug().Interface("req", req).Msg("GetAttr")
 
 	inode, err := s.fs.GetInode(req.Inode)
-
 	if err != nil {
-		if errors.Is(err, fs.ErrorNotFound) {
-			return &proto.GetAttrResponse{Errno: uint32(syscall.ENOENT)}, nil
+		if errno := s.handleErr(err); errno != nil {
+			return &proto.GetAttrResponse{Errno: uint32(*errno)}, nil
 		}
 
 		log.Error().Err(err).Uint32("ptr", req.Inode).Msg("failed to get inode")
@@ -99,8 +98,8 @@ func (s *Server) SetAttr(
 	inode, err := s.fs.GetInode(req.Inode)
 
 	if err != nil {
-		if errors.Is(err, fs.ErrorNotFound) {
-			return &proto.SetAttrResponse{Errno: uint32(syscall.ENOENT)}, nil
+		if errno := s.handleErr(err); errno != nil {
+			return &proto.SetAttrResponse{Errno: uint32(*errno)}, nil
 		}
 
 		log.Error().Err(err).Uint32("ptr", req.Inode).Msg("failed to get inode")
@@ -141,8 +140,8 @@ func (s *Server) Lookup(
 
 	inode, err := s.fs.Lookup(req.Inode, req.Name)
 	if err != nil {
-		if errors.Is(err, fs.ErrorNotFound) {
-			return &proto.LookupResponse{Errno: uint32(syscall.ENOENT)}, nil
+		if errno := s.handleErr(err); errno != nil {
+			return &proto.LookupResponse{Errno: uint32(*errno)}, nil
 		}
 
 		log.Error().Err(err).Uint32("ptr", req.Inode).Msg("failed to get inode")
@@ -173,8 +172,8 @@ func (s *Server) OpenDir(stream proto.LearnFS_OpenDirServer) error {
 		if dir == nil {
 			dir, err = s.fs.GetDir(in.Inode)
 			if err != nil {
-				if err == fs.ErrorNotFound {
-					resp := &proto.DirEntryResponse{Errno: uint32(syscall.ENOENT)}
+				if errno := s.handleErr(err); errno != nil {
+					resp := &proto.DirEntryResponse{Errno: uint32(*errno)}
 
 					_ = stream.Send(resp)
 					return nil
@@ -223,8 +222,8 @@ func (s *Server) OpenFile(
 
 	_, err := s.fs.GetInode(req.Inode)
 	if err != nil {
-		if errors.Is(err, fs.ErrorNotFound) {
-			return &proto.OpenFileResponse{Errno: uint32(syscall.ENOENT)}, nil
+		if errno := s.handleErr(err); errno != nil {
+			return &proto.OpenFileResponse{Errno: uint32(*errno)}, nil
 		}
 
 		log.Error().Err(err).Uint32("ptr", req.Inode).Msg("failed to get inode")
@@ -246,8 +245,8 @@ func (s *Server) CreateFile(
 		req.Umask,
 		req.Uid,
 		req.Gid)
-	if errors.Is(err, fs.ErrorAlreadyExists) {
-		return &proto.CreateFileResponse{Errno: uint32(syscall.EEXIST)}, nil
+	if errno := s.handleErr(err); errno != nil {
+		return &proto.CreateFileResponse{Errno: uint32(*errno)}, nil
 	}
 
 	if err != nil {
@@ -288,8 +287,8 @@ func (s *Server) Mkdir(
 		req.Umask,
 		req.Uid,
 		req.Gid)
-	if errors.Is(err, fs.ErrorAlreadyExists) {
-		return &proto.MkdirResponse{Errno: uint32(syscall.EEXIST)}, nil
+	if errno := s.handleErr(err); errno != nil {
+		return &proto.MkdirResponse{Errno: uint32(*errno)}, nil
 	}
 
 	if err != nil {
@@ -311,8 +310,8 @@ func (s *Server) Read(
 
 	_, err := s.fs.GetInode(req.Inode)
 	if err != nil {
-		if errors.Is(err, fs.ErrorNotFound) {
-			return &proto.ReadResponse{Errno: uint32(syscall.ENOENT)}, nil
+		if errno := s.handleErr(err); errno != nil {
+			return &proto.ReadResponse{Errno: uint32(*errno)}, nil
 		}
 
 		log.Error().Err(err).Uint32("ptr", req.Inode).Msg("failed to get inode")
@@ -334,8 +333,8 @@ func (s *Server) RemoveFile(
 	log.Debug().Interface("req", req).Msg("RemoveFile")
 
 	err := s.fs.RemoveFile(req.DirInode, req.Name)
-	if errors.Is(err, fs.ErrorNotFound) {
-		return &proto.RemoveFileResponse{Errno: uint32(syscall.ENOENT)}, nil
+	if errno := s.handleErr(err); errno != nil {
+		return &proto.RemoveFileResponse{Errno: uint32(*errno)}, nil
 	}
 
 	if err != nil {
@@ -348,6 +347,28 @@ func (s *Server) RemoveFile(
 	}
 
 	return &proto.RemoveFileResponse{}, nil
+}
+
+func (s *Server) RemoveDir(
+	ctx context.Context, req *proto.RemoveDirRequest) (*proto.RemoveDirResponse, error) {
+
+	log.Debug().Interface("req", req).Msg("RemoveDir")
+
+	err := s.fs.RemoveDirectory(req.DirInode, req.Name)
+	if errno := s.handleErr(err); errno != nil {
+		return &proto.RemoveDirResponse{Errno: uint32(*errno)}, nil
+	}
+
+	if err != nil {
+		log.Error().Err(err).
+			Uint32("ptr", req.DirInode).
+			Str("name", req.Name).
+			Msg("failed to remove file")
+
+		return nil, status.Errorf(codes.Internal, "internal error")
+	}
+
+	return &proto.RemoveDirResponse{}, nil
 }
 
 func (s *Server) Statfs(
@@ -380,8 +401,8 @@ func (s *Server) Write(
 
 	_, err := s.fs.GetInode(req.Inode)
 	if err != nil {
-		if errors.Is(err, fs.ErrorNotFound) {
-			return &proto.WriteResponse{Errno: uint32(syscall.ENOENT)}, nil
+		if errno := s.handleErr(err); errno != nil {
+			return &proto.WriteResponse{Errno: uint32(*errno)}, nil
 		}
 
 		log.Error().Err(err).Uint32("ptr", req.Inode).Msg("failed to get inode")
@@ -412,4 +433,14 @@ func (s *Server) inode2attr(inode *fs.Inode) *proto.Attr {
 	}
 
 	return attr
+}
+
+func (s *Server) handleErr(err error) *syscall.Errno {
+	var sysErr *fs.ErrorSystem
+
+	if errors.As(err, &sysErr) {
+		return &sysErr.Errno
+	}
+
+	return nil
 }

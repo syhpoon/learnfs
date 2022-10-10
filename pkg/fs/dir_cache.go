@@ -45,6 +45,12 @@ func (dc *dirCache) addDir(dir *Directory) {
 	dc.Unlock()
 }
 
+func (dc *dirCache) deleteDir(ptr InodePtr) {
+	dc.Lock()
+	delete(dc.cache, ptr)
+	dc.Unlock()
+}
+
 func (dc *dirCache) getDir(ptr InodePtr) (*Directory, error) {
 	dc.RLock()
 	d, ok := dc.cache[ptr]

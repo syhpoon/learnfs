@@ -8,6 +8,7 @@ import (
 	"io"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -140,6 +141,10 @@ func (ino *Inode) SetDirty(dirty bool) {
 
 func (ino *Inode) IsDirty() bool {
 	return atomic.LoadInt32(&ino.dirty) == 1
+}
+
+func (ino *Inode) Type() uint32 {
+	return ino.Mode & syscall.S_IFMT
 }
 
 func (ino *Inode) EncodeTo(w io.Writer) error {

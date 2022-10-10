@@ -2,9 +2,19 @@
 
 package fs
 
-import "errors"
+import (
+	"syscall"
+)
+
+type ErrorSystem struct {
+	Errno syscall.Errno
+}
+
+func (err *ErrorSystem) Error() string {
+	return err.Errno.Error()
+}
 
 var (
-	ErrorNotFound      = errors.New("not found")
-	ErrorAlreadyExists = errors.New("already exists")
+	ErrorNotFound = &ErrorSystem{Errno: syscall.ENOENT}
+	ErrorExists   = &ErrorSystem{Errno: syscall.EEXIST}
 )

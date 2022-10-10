@@ -15,6 +15,7 @@ service LearnFS {
     rpc OpenFile (OpenFileRequest) returns (OpenFileResponse);
     rpc Read (ReadRequest) returns (ReadResponse);
     rpc RemoveFile (RemoveFileRequest) returns (RemoveFileResponse);
+    rpc RemoveDir (RemoveDirRequest) returns (RemoveDirResponse);
     rpc SetAttr (SetAttrRequest) returns (SetAttrResponse);
     rpc Statfs (StatfsRequest) returns (StatfsResponse);
     rpc Write (WriteRequest) returns (WriteResponse);
@@ -155,6 +156,15 @@ message RemoveFileRequest {
 }
 
 message RemoveFileResponse {
+    uint32 errno = 1;
+}
+
+message RemoveDirRequest {
+    uint32 dir_inode = 1;
+    string name = 2;
+}
+
+message RemoveDirResponse {
     uint32 errno = 1;
 }
 
