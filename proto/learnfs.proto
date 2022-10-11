@@ -14,10 +14,12 @@ service LearnFS {
     rpc OpenDir (stream NextDirEntryRequest) returns (stream DirEntryResponse);
     rpc OpenFile (OpenFileRequest) returns (OpenFileResponse);
     rpc Read (ReadRequest) returns (ReadResponse);
+    rpc Readlink (ReadlinkRequest) returns (ReadlinkResponse);
     rpc RemoveFile (RemoveFileRequest) returns (RemoveFileResponse);
     rpc RemoveDir (RemoveDirRequest) returns (RemoveDirResponse);
     rpc SetAttr (SetAttrRequest) returns (SetAttrResponse);
     rpc Statfs (StatfsRequest) returns (StatfsResponse);
+    rpc Symlink (SymlinkRequest) returns (SymlinkResponse);
     rpc Write (WriteRequest) returns (WriteResponse);
 }
 
@@ -150,6 +152,15 @@ message ReadResponse {
     bytes data = 2;
 }
 
+message ReadlinkRequest {
+    uint32 inode = 1;
+}
+
+message ReadlinkResponse {
+    uint32 errno = 1;
+    string target = 2;
+}
+
 message RemoveFileRequest {
     uint32 dir_inode = 1;
     string name = 2;
@@ -209,4 +220,17 @@ message StatfsResponse {
     uint32 block_size = 6;
     // Maximum file name length
     uint32 max_file_name_length = 7;
+}
+
+message SymlinkRequest {
+    uint32 inode = 1;
+    string link = 2;
+    string target = 3;
+    uint32 uid = 4;
+    uint32 gid = 5;
+}
+
+message SymlinkResponse {
+    uint32 errno = 1;
+    Attr attr = 2;
 }

@@ -30,10 +30,12 @@ type LearnFSClient interface {
 	OpenDir(ctx context.Context, opts ...grpc.CallOption) (LearnFS_OpenDirClient, error)
 	OpenFile(ctx context.Context, in *OpenFileRequest, opts ...grpc.CallOption) (*OpenFileResponse, error)
 	Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error)
+	Readlink(ctx context.Context, in *ReadlinkRequest, opts ...grpc.CallOption) (*ReadlinkResponse, error)
 	RemoveFile(ctx context.Context, in *RemoveFileRequest, opts ...grpc.CallOption) (*RemoveFileResponse, error)
 	RemoveDir(ctx context.Context, in *RemoveDirRequest, opts ...grpc.CallOption) (*RemoveDirResponse, error)
 	SetAttr(ctx context.Context, in *SetAttrRequest, opts ...grpc.CallOption) (*SetAttrResponse, error)
 	Statfs(ctx context.Context, in *StatfsRequest, opts ...grpc.CallOption) (*StatfsResponse, error)
+	Symlink(ctx context.Context, in *SymlinkRequest, opts ...grpc.CallOption) (*SymlinkResponse, error)
 	Write(ctx context.Context, in *WriteRequest, opts ...grpc.CallOption) (*WriteResponse, error)
 }
 
@@ -139,6 +141,15 @@ func (c *learnFSClient) Read(ctx context.Context, in *ReadRequest, opts ...grpc.
 	return out, nil
 }
 
+func (c *learnFSClient) Readlink(ctx context.Context, in *ReadlinkRequest, opts ...grpc.CallOption) (*ReadlinkResponse, error) {
+	out := new(ReadlinkResponse)
+	err := c.cc.Invoke(ctx, "/learnfs.LearnFS/Readlink", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *learnFSClient) RemoveFile(ctx context.Context, in *RemoveFileRequest, opts ...grpc.CallOption) (*RemoveFileResponse, error) {
 	out := new(RemoveFileResponse)
 	err := c.cc.Invoke(ctx, "/learnfs.LearnFS/RemoveFile", in, out, opts...)
@@ -175,6 +186,15 @@ func (c *learnFSClient) Statfs(ctx context.Context, in *StatfsRequest, opts ...g
 	return out, nil
 }
 
+func (c *learnFSClient) Symlink(ctx context.Context, in *SymlinkRequest, opts ...grpc.CallOption) (*SymlinkResponse, error) {
+	out := new(SymlinkResponse)
+	err := c.cc.Invoke(ctx, "/learnfs.LearnFS/Symlink", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *learnFSClient) Write(ctx context.Context, in *WriteRequest, opts ...grpc.CallOption) (*WriteResponse, error) {
 	out := new(WriteResponse)
 	err := c.cc.Invoke(ctx, "/learnfs.LearnFS/Write", in, out, opts...)
@@ -196,10 +216,12 @@ type LearnFSServer interface {
 	OpenDir(LearnFS_OpenDirServer) error
 	OpenFile(context.Context, *OpenFileRequest) (*OpenFileResponse, error)
 	Read(context.Context, *ReadRequest) (*ReadResponse, error)
+	Readlink(context.Context, *ReadlinkRequest) (*ReadlinkResponse, error)
 	RemoveFile(context.Context, *RemoveFileRequest) (*RemoveFileResponse, error)
 	RemoveDir(context.Context, *RemoveDirRequest) (*RemoveDirResponse, error)
 	SetAttr(context.Context, *SetAttrRequest) (*SetAttrResponse, error)
 	Statfs(context.Context, *StatfsRequest) (*StatfsResponse, error)
+	Symlink(context.Context, *SymlinkRequest) (*SymlinkResponse, error)
 	Write(context.Context, *WriteRequest) (*WriteResponse, error)
 	mustEmbedUnimplementedLearnFSServer()
 }
@@ -232,6 +254,9 @@ func (UnimplementedLearnFSServer) OpenFile(context.Context, *OpenFileRequest) (*
 func (UnimplementedLearnFSServer) Read(context.Context, *ReadRequest) (*ReadResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Read not implemented")
 }
+func (UnimplementedLearnFSServer) Readlink(context.Context, *ReadlinkRequest) (*ReadlinkResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Readlink not implemented")
+}
 func (UnimplementedLearnFSServer) RemoveFile(context.Context, *RemoveFileRequest) (*RemoveFileResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RemoveFile not implemented")
 }
@@ -243,6 +268,9 @@ func (UnimplementedLearnFSServer) SetAttr(context.Context, *SetAttrRequest) (*Se
 }
 func (UnimplementedLearnFSServer) Statfs(context.Context, *StatfsRequest) (*StatfsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Statfs not implemented")
+}
+func (UnimplementedLearnFSServer) Symlink(context.Context, *SymlinkRequest) (*SymlinkResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Symlink not implemented")
 }
 func (UnimplementedLearnFSServer) Write(context.Context, *WriteRequest) (*WriteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Write not implemented")
@@ -412,6 +440,24 @@ func _LearnFS_Read_Handler(srv interface{}, ctx context.Context, dec func(interf
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LearnFS_Readlink_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadlinkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LearnFSServer).Readlink(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/learnfs.LearnFS/Readlink",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LearnFSServer).Readlink(ctx, req.(*ReadlinkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _LearnFS_RemoveFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RemoveFileRequest)
 	if err := dec(in); err != nil {
@@ -484,6 +530,24 @@ func _LearnFS_Statfs_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LearnFS_Symlink_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SymlinkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LearnFSServer).Symlink(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/learnfs.LearnFS/Symlink",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LearnFSServer).Symlink(ctx, req.(*SymlinkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _LearnFS_Write_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(WriteRequest)
 	if err := dec(in); err != nil {
@@ -538,6 +602,10 @@ var LearnFS_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _LearnFS_Read_Handler,
 		},
 		{
+			MethodName: "Readlink",
+			Handler:    _LearnFS_Readlink_Handler,
+		},
+		{
 			MethodName: "RemoveFile",
 			Handler:    _LearnFS_RemoveFile_Handler,
 		},
@@ -552,6 +620,10 @@ var LearnFS_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Statfs",
 			Handler:    _LearnFS_Statfs_Handler,
+		},
+		{
+			MethodName: "Symlink",
+			Handler:    _LearnFS_Symlink_Handler,
 		},
 		{
 			MethodName: "Write",

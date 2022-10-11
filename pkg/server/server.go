@@ -327,6 +327,37 @@ func (s *Server) Read(
 	return &proto.ReadResponse{Data: data}, nil
 }
 
+func (s *Server) Readlink(
+	ctx context.Context, req *proto.ReadlinkRequest) (*proto.ReadlinkResponse, error) {
+
+	log.Debug().Interface("req", req).Msg("Readlink")
+
+	inode, err := s.fs.GetInode(req.Inode)
+	if err != nil {
+		if errno := s.handleErr(err); errno != nil {
+			return &proto.ReadlinkResponse{Errno: uint32(*errno)}, nil
+		}
+
+		log.Error().Err(err).Uint32("ptr", req.Inode).Msg("failed to get inode")
+		return nil, status.Errorf(codes.Internal, "internal error")
+	}
+
+	inode.RLock()
+	defer inode.RUnlock()
+
+	if inode.Type() != syscall.S_IFLNK {
+		return &proto.ReadlinkResponse{Errno: uint32(syscall.EINVAL)}, nil
+	}
+
+	data, err := s.fs.Read(req.Inode, 0, int(inode.Size))
+	if err != nil {
+		log.Error().Err(err).Uint32("ptr", req.Inode).Msg("failed to read link data")
+		return nil, status.Errorf(codes.Internal, "internal error")
+	}
+
+	return &proto.ReadlinkResponse{Target: string(data)}, nil
+}
+
 func (s *Server) RemoveFile(
 	ctx context.Context, req *proto.RemoveFileRequest) (*proto.RemoveFileResponse, error) {
 
@@ -388,6 +419,28 @@ func (s *Server) Statfs(
 	}
 
 	return resp, nil
+}
+
+func (s *Server) Symlink(
+	ctx context.Context, req *proto.SymlinkRequest) (*proto.SymlinkResponse, error) {
+
+	log.Debug().Interface("req", req).Msg("Symlink")
+
+	inode, err := s.fs.Symlink(req.Inode, req.Link, req.Target, req.Uid, req.Gid)
+	if err != nil {
+		if errno := s.handleErr(err); errno != nil {
+			return &proto.SymlinkResponse{Errno: uint32(*errno)}, nil
+		}
+
+		log.Error().Err(err).
+			Uint32("ptr", req.Inode).
+			Str("link", req.Link).
+			Str("target", req.Target).
+			Msg("failed to symlink")
+		return nil, status.Errorf(codes.Internal, "internal error")
+	}
+
+	return &proto.SymlinkResponse{Attr: s.inode2attr(inode)}, nil
 }
 
 func (s *Server) Write(

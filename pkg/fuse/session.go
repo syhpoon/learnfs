@@ -97,6 +97,8 @@ func (ses *Session) Start(ctx context.Context) {
 			ses.open(ctx, r)
 		case *fuse.ReadRequest:
 			ses.read(ctx, r)
+		case *fuse.ReadlinkRequest:
+			ses.readlink(ctx, r)
 		case *fuse.ReleaseRequest:
 			ses.release(ctx, r)
 		case *fuse.RemoveRequest:
@@ -105,11 +107,13 @@ func (ses *Session) Start(ctx context.Context) {
 			ses.setAttr(ctx, r)
 		case *fuse.StatfsRequest:
 			ses.statfs(ctx, r)
+		case *fuse.SymlinkRequest:
+			ses.symlink(ctx, r)
 		case *fuse.WriteRequest:
 			ses.write(ctx, r)
 		default:
-			fmt.Printf(">>> GOT REQ: %v (%T)\n", req, req)
-			req.RespondError(fmt.Errorf("WAT"))
+			fmt.Printf("DEBUG: got req: %v (%T)\n", req, req)
+			req.RespondError(fmt.Errorf("not implemented"))
 		}
 	}
 }

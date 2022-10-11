@@ -3,8 +3,10 @@
 package fs
 
 import (
+	"errors"
 	"fmt"
 	"syscall"
+	"time"
 )
 
 type Stats struct {
@@ -296,6 +298,78 @@ func (fs *Filesystem) StatFs() *Stats {
 		BlockSize:         fs.superblock.BlockSize,
 		MaxFileNameLength: MAX_FILE_NAME,
 	}
+}
+
+func (fs *Filesystem) Symlink(ptr InodePtr, link, target string, uid, gid uint32) (*Inode, error) {
+	dir, err := fs.dirCache.getDir(ptr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get directory %d: %w", ptr, err)
+	}
+
+	if _, err := dir.GetEntry(link); err != nil {
+		if !errors.Is(err, ErrorNotFound) {
+			return nil, fmt.Errorf("failed to get dir entry %s: %w", link, err)
+		}
+	} else {
+		return nil, ErrorExists
+	}
+
+	var clearInode *InodePtr
+	var clearBlock *BlockPtr
+	defer func() {
+		if clearInode != nil {
+			_ = fs.inodeAllocator.DeallocateInode(*clearInode)
+		}
+
+		if clearBlock != nil {
+			_ = fs.blockAllocator.DeallocateBlock(*clearBlock)
+		}
+	}()
+
+	// Allocate a new inode
+	inode, err := fs.inodeAllocator.AllocateInode()
+	if err != nil {
+		return nil, fmt.Errorf("failed to allocate inode: %w", err)
+	}
+
+	now := time.Now().UnixMicro()
+
+	inode.Mode = syscall.S_IFLNK | 0x777
+	inode.Uid = uid
+	inode.Gid = gid
+	inode.Size = uint32(len(target))
+	inode.Nlink = 1
+	inode.Ctime = now
+	inode.Mtime = now
+	inode.Atime = now
+
+	blk, err := fs.blockAllocator.AllocateBlock()
+	if err != nil {
+		clearInode = &inode.ptr
+		return nil, fmt.Errorf("failed to allocate block: %w", err)
+	}
+
+	blk.write(0, []byte(target))
+
+	if err := inode.AddBlockPtr(blk.ptr); err != nil {
+		clearInode = &inode.ptr
+		clearBlock = &blk.ptr
+		return nil, fmt.Errorf("failed to add block to inode: %w", err)
+	}
+
+	if err := dir.AddEntry(link, inode.ptr); err != nil {
+		clearInode = &inode.ptr
+		clearBlock = &blk.ptr
+		return nil, fmt.Errorf("failed to add directory entry: %w", err)
+	}
+
+	inode.SetDirty(true)
+	blk.setDirty(true)
+
+	fs.inodeCache.AddInode(inode)
+	fs.blockCache.addBlock(blk)
+
+	return inode, nil
 }
 
 func (fs *Filesystem) Write(ptr InodePtr, offset int64, data []byte) (int, error) {
