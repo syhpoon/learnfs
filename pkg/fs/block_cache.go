@@ -78,12 +78,16 @@ func (bc *blockCache) flush() error {
 	bc.Lock()
 	defer bc.Unlock()
 
+	blocks := make([]*block, 0, 10)
 	ops := make([]*device.Op, 0, 10)
 
 	for ptr, blk := range bc.cache {
 		if !blk.isDirty() {
 			continue
 		}
+
+		blocks = append(blocks, blk)
+		blk.Lock()
 
 		ops = append(ops, &device.Op{
 			Buf:    blk.data,
@@ -96,13 +100,24 @@ func (bc *blockCache) flush() error {
 				return fmt.Errorf("failed to write blocks: %w", err)
 			}
 
+			for _, blk := range blocks {
+				blk.setDirty(false)
+				blk.Unlock()
+			}
+
 			ops = ops[:0]
+			blocks = blocks[:0]
 		}
 	}
 
 	if len(ops) > 0 {
 		if err := bc.dev.Write(ops...); err != nil {
 			return fmt.Errorf("failed to write blocks: %w", err)
+		}
+
+		for _, blk := range blocks {
+			blk.setDirty(false)
+			blk.Unlock()
 		}
 	}
 

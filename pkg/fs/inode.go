@@ -54,13 +54,17 @@ type Inode struct {
 	// a linear list of all the inode blocks, direct and indirect
 	blocks []BlockPtr
 
+	// a map from a block index to a double indirect block
+	doubleBlocks map[int64]BlockPtr
+
 	sync.RWMutex
 }
 
 func newInodeFromBuf(ptr InodePtr, buf Buf) (*Inode, error) {
 	ino := &Inode{
-		ptr:    ptr,
-		blocks: make([]BlockPtr, DIRECT_BLOCKS_NUM),
+		ptr:          ptr,
+		blocks:       make([]BlockPtr, DIRECT_BLOCKS_NUM),
+		doubleBlocks: map[int64]BlockPtr{},
 	}
 
 	err := ino.DecodeFrom(bytes.NewReader(buf))
@@ -88,6 +92,7 @@ func newInode(ptr InodePtr) *Inode {
 		ptr:                 ptr,
 		dirty:               0,
 		blocks:              make([]BlockPtr, DIRECT_BLOCKS_NUM),
+		doubleBlocks:        map[int64]BlockPtr{},
 	}
 }
 
@@ -113,6 +118,16 @@ func (ino *Inode) getBlockPtrsNoLock() []BlockPtr {
 	}
 
 	return blocks
+}
+
+func (ino *Inode) addBlocks(blocks []BlockPtr) {
+	ino.Lock()
+	ino.addBlocksNoLock(blocks)
+	ino.Unlock()
+}
+
+func (ino *Inode) addBlocksNoLock(blocks []BlockPtr) {
+	ino.blocks = append(ino.blocks, blocks...)
 }
 
 func (ino *Inode) AddBlockPtr(newPtr BlockPtr) error {

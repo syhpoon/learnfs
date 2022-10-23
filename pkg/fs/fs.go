@@ -259,13 +259,31 @@ func (fs *Filesystem) setInodeBlock(ino *Inode, idx int64, ptr BlockPtr) error {
 	}
 
 	if idx >= DIRECT_BLOCKS_NUM {
-		blk, err := fs.blockCache.getBlock(ino.IndirectBlock)
-		if err != nil {
-			return fmt.Errorf("failed to get indirect block %d for inode %d: %w",
-				ino.IndirectBlock, ino.ptr, err)
-		}
+		ptrsPerPage := int64(fs.blockSize) / BlockPtrSize
+		singleMaxBlocks := int64(DIRECT_BLOCKS_NUM) + ptrsPerPage
 
-		s := (idx - DIRECT_BLOCKS_NUM) * BlockPtrSize
+		var blk *block
+		var s int64
+		var err error
+
+		if idx < singleMaxBlocks {
+			blk, err = fs.blockCache.getBlock(ino.IndirectBlock)
+			if err != nil {
+				return fmt.Errorf("failed to get indirect block %d for inode %d: %w",
+					ino.IndirectBlock, ino.ptr, err)
+			}
+
+			s = (idx - DIRECT_BLOCKS_NUM) * BlockPtrSize
+		} else {
+			doublePtr := ino.doubleBlocks[idx/int64(fs.blockSize)]
+			blk, err = fs.blockCache.getBlock(doublePtr)
+			if err != nil {
+				return fmt.Errorf("failed to get double indirect block %d for inode %d: %w",
+					ino.IndirectBlock, ino.ptr, err)
+			}
+
+			s = (idx - singleMaxBlocks) * BlockPtrSize
+		}
 
 		blk.Lock()
 		binEncoding.PutUint32(blk.data[s:s+BlockPtrSize], ptr)
@@ -280,62 +298,177 @@ func (fs *Filesystem) setInodeBlock(ino *Inode, idx int64, ptr BlockPtr) error {
 }
 
 func (fs *Filesystem) prepareInodeBlock(ino *Inode, idx int64) error {
-	// Direct block
-	if idx < DIRECT_BLOCKS_NUM {
+	// Block already present (either direct or loaded previously)
+	if idx < int64(len(ino.blocks)) {
 		return nil
 	}
 
 	ptrsPerPage := int64(fs.blockSize) / BlockPtrSize
 
 	// Number of single indirect pointers
-	maxBlocks := int64(DIRECT_BLOCKS_NUM) + ptrsPerPage
-
-	if idx < maxBlocks {
-		// Need to load the appropriate indirect blocks first
-		if int64(len(ino.blocks)) <= idx {
-			// Need to allocate the single indirect block pointer
-			if ino.IndirectBlock == 0 {
-				blk, err := fs.blockAllocator.AllocateBlock()
-				if err != nil {
-					return fmt.Errorf(
-						"failed to allocate indirect block for inode %d: %w", ino.ptr, err)
-				}
-
-				fs.blockCache.addBlock(blk)
-
-				// Since it's a newly allocated indirect block, all the pointer are
-				// unused (0) at this point
-				ino.blocks = append(ino.blocks, make([]BlockPtr, ptrsPerPage)...)
-				ino.IndirectBlock = blk.ptr
-			} else {
-				// Load block pointers
-				blk, err := fs.blockCache.getBlock(ino.IndirectBlock)
-				if err != nil {
-					return fmt.Errorf(
-						"failed to load indirect block %d for inode %d: %w",
-						ino.IndirectBlock, ino.ptr, err)
-				}
-
-				blocks := make([]BlockPtr, ptrsPerPage)
-
-				for i := range blocks {
-					s := int64(i) * BlockPtrSize
-					blocks[i] = binEncoding.Uint32(blk.data[s : s+BlockPtrSize])
-				}
-
-				ino.blocks = append(ino.blocks, blocks...)
-			}
-
-			ino.SetDirty(true)
-		}
-	}
+	singleMaxBlocks := int64(DIRECT_BLOCKS_NUM) + ptrsPerPage
 
 	// Number of double indirect pointers
-	maxBlocks += ptrsPerPage * ptrsPerPage
+	doubleMaxBlocks := singleMaxBlocks + ptrsPerPage*ptrsPerPage
 
-	if idx < maxBlocks {
+	if idx < singleMaxBlocks {
+		// Need to allocate the indirect block pointer
+		if ino.IndirectBlock == 0 {
+			if err := fs.allocateSingleIndirectBlock(ino, ptrsPerPage); err != nil {
+				return err
+			}
+		} else {
+			// Load block pointers
+			blocks, err := fs.loadIndirectBlocks(ino.IndirectBlock, ptrsPerPage)
+			if err != nil {
+				return err
+			}
 
+			ino.addBlocksNoLock(blocks)
+		}
+
+		ino.SetDirty(true)
+	} else if idx < doubleMaxBlocks {
+		var doubleBlk *block
+		var err error
+
+		// Double indirect
+		if ino.DoubleIndirectBlock == 0 {
+			doubleBlk, err = fs.allocateDoubleIndirectBlock(ino)
+			if err != nil {
+				return err
+			}
+		} else {
+			doubleBlk, err = fs.blockCache.getBlock(ino.DoubleIndirectBlock)
+			if err != nil {
+				return fmt.Errorf("failed to load double indirect block %d: %w",
+					ino.DoubleIndirectBlock, err)
+			}
+		}
+
+		doubleBlk.Lock()
+		defer doubleBlk.Unlock()
+
+	LOOP:
+		for l1 := int64(0); l1 < ptrsPerPage; l1++ {
+			var l1Block *block
+			l1Offset := l1 * BlockPtrSize
+			l1BlockPtr := binEncoding.Uint32(doubleBlk.data[l1Offset : l1Offset+BlockPtrSize])
+
+			if l1BlockPtr == 0 {
+				l1Block, err = fs.allocateL1DoubleIndirectBlock(doubleBlk, l1Offset)
+				if err != nil {
+					return err
+				}
+			} else {
+				l1Block, err = fs.blockCache.getBlock(l1BlockPtr)
+				if err != nil {
+					return fmt.Errorf("failed to load l1 double indirect block %d: %w",
+						l1BlockPtr, err)
+				}
+			}
+
+			l1Block.Lock()
+			defer l1Block.Unlock()
+
+			for l2 := int64(0); l2 < ptrsPerPage; l2++ {
+				l2Offset := l2 * BlockPtrSize
+				l2BlockPtr := binEncoding.Uint32(l1Block.data[l2Offset : l2Offset+BlockPtrSize])
+
+				if l2BlockPtr == 0 {
+					blk, err := fs.blockAllocator.AllocateBlock()
+					if err != nil {
+						return fmt.Errorf(
+							"failed to allocate l2 double indirect block for inode %d: %w",
+							ino.ptr, err)
+					}
+
+					fs.blockCache.addBlock(blk)
+					binEncoding.PutUint32(l1Block.data[l2Offset:l2Offset+BlockPtrSize], blk.ptr)
+					l1Block.setDirty(true)
+
+					// Since it's a newly allocated indirect block, all the pointers are
+					// unused (0) at this point
+					ino.addBlocksNoLock(make([]BlockPtr, ptrsPerPage))
+					ino.doubleBlocks[idx/int64(fs.blockSize)] = blk.ptr
+				} else {
+					blocks, err := fs.loadIndirectBlocks(l2BlockPtr, ptrsPerPage)
+					if err != nil {
+						return err
+					}
+
+					ino.addBlocksNoLock(blocks)
+				}
+
+				if int64(len(ino.blocks)) > idx {
+					break LOOP
+				}
+			}
+		}
+	} else {
+		return fmt.Errorf("inode %d block index exceeding maximum file size: %d", ino.ptr, idx)
 	}
 
 	return nil
+}
+
+func (fs *Filesystem) allocateSingleIndirectBlock(ino *Inode, ptrsPerPage int64) error {
+	blk, err := fs.blockAllocator.AllocateBlock()
+	if err != nil {
+		return fmt.Errorf(
+			"failed to allocate indirect block for inode %d: %w", ino.ptr, err)
+	}
+
+	fs.blockCache.addBlock(blk)
+
+	// Since it's a newly allocated indirect block, all the pointers are
+	// unused (0) at this point
+	ino.blocks = append(ino.blocks, make([]BlockPtr, ptrsPerPage)...)
+	ino.IndirectBlock = blk.ptr
+
+	return nil
+}
+
+func (fs *Filesystem) allocateDoubleIndirectBlock(ino *Inode) (*block, error) {
+	blk, err := fs.blockAllocator.AllocateBlock()
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to allocate double indirect block for inode %d: %w", ino.ptr, err)
+	}
+
+	fs.blockCache.addBlock(blk)
+	ino.DoubleIndirectBlock = blk.ptr
+
+	return blk, nil
+}
+
+func (fs *Filesystem) allocateL1DoubleIndirectBlock(
+	doubleBlk *block, offset int64) (*block, error) {
+
+	blk, err := fs.blockAllocator.AllocateBlock()
+	if err != nil {
+		return nil, fmt.Errorf("failed to allocate l1 double indirect block: %w", err)
+	}
+
+	fs.blockCache.addBlock(blk)
+	binEncoding.PutUint32(doubleBlk.data[offset:offset+BlockPtrSize], blk.ptr)
+	doubleBlk.setDirty(true)
+
+	return blk, nil
+}
+
+func (fs *Filesystem) loadIndirectBlocks(ptr BlockPtr, ptrsPerPage int64) ([]BlockPtr, error) {
+	blk, err := fs.blockCache.getBlock(ptr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load indirect block %d: %w", ptr, err)
+	}
+
+	blocks := make([]BlockPtr, ptrsPerPage)
+
+	for i := range blocks {
+		s := int64(i) * BlockPtrSize
+		blocks[i] = binEncoding.Uint32(blk.data[s : s+BlockPtrSize])
+	}
+
+	return blocks, nil
 }

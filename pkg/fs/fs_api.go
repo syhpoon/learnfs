@@ -240,8 +240,8 @@ func (fs *Filesystem) Read(ptr InodePtr, offset int64, size int) ([]byte, error)
 		return nil, fmt.Errorf("failed to get inode %d: %w", ptr, err)
 	}
 
-	inode.RLock()
-	defer inode.RUnlock()
+	inode.Lock()
+	defer inode.Unlock()
 
 	buf := make([]byte, 0, size)
 	done := false
